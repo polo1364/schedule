@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>一週班表（RWD＋手勢抽屜｜支援可編輯）</title>
+<title>自動排班表</title>
 <style>
   :root{
     --bg:#f3f4f6; --card:#fff; --text:#111827; --muted:#6b7280; --border:#e5e7eb;
@@ -48,7 +48,7 @@
     border-radius:8px;padding:4px 8px;margin-bottom:6px;display:inline-block;
   }
 
-  /* 卡片摘要：多行、兩欄 */
+  /* 卡片摘要 */
   .day .summary{white-space:normal;overflow:visible;text-overflow:initial;font-size:12px;color:#374151}
   @media (prefers-color-scheme: dark){ .day .summary{color:#cbd5e1} }
   .sumgrid{display:flex;flex-direction:column;gap:4px}
@@ -142,7 +142,7 @@
       <div class="areas" id="areaControls"></div>
       <div style="margin:10px 0">
         <label style="display:inline-flex;gap:8px;align-items:center">
-          <input type="checkbox" id="abfHelper"> ABF 小幫手
+          <input type="checkbox" id="abfHelper"> 小幫手
         </label>
       </div>
       <div class="chips" id="peopleChips"></div>
@@ -189,11 +189,13 @@
 
 <script>
 /* ========= 常數與資料 ========= */
-const LS_KEY = "weekly_scheduler_rwd_gestures_support_edit_v1";
+const LS_KEY = "weekly_scheduler_rwd_handfix_v1";
 const PEOPLE = ["佳雯","盈儒","忻潔","阿美","美琪","小瑰","靜媚","韶湄","汶倩","麗凰","奕瑄","小雯","惠玲"];
 const AREAS_WITH_CHECK = ["ABF","CDJ","MNO","PQR","GH"];
 const AREAS_FIXED = ["粗篩","洗球","支援","請假"];
 const ALL_AREAS = [...AREAS_WITH_CHECK, ...AREAS_FIXED, "未分派"];
+const SINGLE_SLOT = new Set(["ABF","CDJ","MNO","PQR","GH"]);
+const MULTI_SLOT  = new Set(["粗篩","洗球","支援"]);
 
 /* 限制規則 */
 const CANNOT = { "洗球": new Set(["阿美","佳雯","靜媚"]), "粗篩": new Set(["靜媚"]) };
@@ -210,15 +212,15 @@ function load(){ try{return JSON.parse(localStorage.getItem(LS_KEY)||"{}")}catch
 function save(s){ localStorage.setItem(LS_KEY, JSON.stringify(s)); }
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 function intersectSets(a,b){ const out=new Set(); for(const v of a){ if(b.has(v)) out.add(v); } return out; }
+const orderForSummary = ["ABF","CDJ","MNO","PQR","GH","粗篩","洗球","支援","請假"];
 
 /* ========= 摘要（固定順序＋未開機不顯示） ========= */
 function buildSummary(dayData){
   const res = (dayData && dayData.results) || {};
   const checked = (dayData && dayData.checked) || {};
-  const order = ["ABF","CDJ","MNO","PQR","GH","粗篩","洗球","支援","請假"];
-  const rows = order.map(area=>{
+  const rows = orderForSummary.map(area=>{
     const arr = res[area] || [];
-    if (["ABF","CDJ","MNO","PQR","GH"].includes(area) && !(checked||{})[area]) return "";
+    if (AREAS_WITH_CHECK.includes(area) && !(checked||{})[area]) return "";
     if (!arr.length) return "";
     const val = (area === "洗球")
       ? (arr.length>4 ? `${arr.slice(0,4).join("、")} 等 +${arr.length-4}` : arr.join("、"))
@@ -273,6 +275,32 @@ const mAreaControls = document.getElementById("mAreaControls");
 
 let activeDate = null;
 
+/* ====== 條件判斷 ====== */
+function canAssignBase(name, area){
+  if (ALLOW_ONLY[name]) return ALLOW_ONLY[name].has(area);
+  if (CANNOT[area] && CANNOT[area].has(name)) return false;
+  return true;
+}
+function allowedSetFor(area, tomoe, d3i){
+  if(area === "ABF"){
+    const tOn = !!tomoe["ABF"];
+    const dOn = !!d3i["ABF"];
+    if(tOn && dOn) return intersectSets(TOMOE_ALLOWED, D3I_ALLOWED);
+    if(tOn) return TOMOE_ALLOWED;
+    if(dOn) return D3I_ALLOWED;
+    return null;
+  }else{
+    if(!!tomoe[area]) return TOMOE_ALLOWED;
+    return null;
+  }
+}
+function canAssignToArea(name, area, tomoe, d3i){
+  if(!canAssignBase(name, area)) return false;
+  const allow = allowedSetFor(area, tomoe, d3i);
+  return allow ? allow.has(name) : true;
+}
+
+/* ====== 控制面板 UI ====== */
 function bindSharedControls(rootIdPrefix){
   const areaRoot = rootIdPrefix === "m" ? mAreaControls : areaControls;
   areaRoot.innerHTML = "";
@@ -346,45 +374,61 @@ function openDay(key){
   syncControls();
 }
 
-/* ========= 規則引擎 ========= */
-function canAssign(name, area){
-  if (ALLOW_ONLY[name]) return ALLOW_ONLY[name].has(area);
-  if (CANNOT[area] && CANNOT[area].has(name)) return false;
-  return true;
-}
-
-/* 穩定 pickOne（按排班會動） */
+/* ========= 核心：排班規則 ========= */
 function pickOne(pool, area, allowSet=null){
-  let cands = pool.map((n,i)=>({n,i})).filter(x => canAssign(x.n, area));
+  let cands = pool.map((n,i)=>({n,i})).filter(x => canAssignBase(x.n, area));
   if (allowSet) cands = cands.filter(x => allowSet.has(x.n));
   if (!cands.length) return null;
   const idx = Math.floor(Math.random() * cands.length);
-  const pick = cands[idx];      // { n, i }
-  pool.splice(pick.i, 1);       // 從原始 pool 移除
+  const pick = cands[idx];
+  pool.splice(pick.i, 1);
   return pick.n;
 }
-
 function coreForDate(dateStr){
   const d = new Date(dateStr);
   return (d.getDate() % 2 === 1) ? "佳雯" : "阿美";
 }
-function allowedSetFor(area, tomoe, d3i){
-  if(area === "ABF"){
-    const tOn = !!tomoe["ABF"];
-    const dOn = !!d3i["ABF"];
-    if(tOn && dOn) return intersectSets(TOMOE_ALLOWED, D3I_ALLOWED);
-    if(tOn) return TOMOE_ALLOWED;
-    if(dOn) return D3I_ALLOWED;
-    return null;
-  }else{
-    if(!!tomoe[area]) return TOMOE_ALLOWED;
-    return null;
+
+/* ====== 手動鎖定：工具 ====== */
+function findLockedAreaOf(name, manualLocks){
+  for(const area of Object.keys(manualLocks||{})){
+    const arr = manualLocks[area]||[];
+    if(arr.includes(name)) return area;
+  }
+  return null;
+}
+function removeFromAllAreas(manualLocks, name){
+  for(const a of Object.keys(manualLocks)){
+    manualLocks[a] = (manualLocks[a]||[]).filter(x=>x!==name);
   }
 }
-function canAssignToArea(name, area, tomoe, d3i){
-  if(!canAssign(name, area)) return false;
-  const allow = allowedSetFor(area, tomoe, d3i);
-  return allow ? allow.has(name) : true;
+function normalizeLocks(day){
+  // 規則：同一人最多出現在一個區；優先順序：
+  const priority = ["粗篩","ABF","CDJ","MNO","PQR","GH","洗球","支援"];
+  const leaveSet = new Set(day.leave||[]);
+  const tomoe = day.tomoe||{}; const d3i = day.d3i||{};
+  const src = day.manualLocks || {};
+  const dst = {};
+  priority.forEach(a => { dst[a]=[]; });
+  const used = new Set();
+
+  for(const a of priority){
+    const arr = (src[a]||[]).slice();
+    for(const name of arr){
+      if(used.has(name)) continue;
+      if(leaveSet.has(name)) continue;
+      if(!canAssignToArea(name, a, tomoe, d3i)) continue;
+      if(SINGLE_SLOT.has(a)){
+        dst[a] = [name];
+        used.add(name);
+      }else{
+        // 多槽可多位，但人不可重複
+        dst[a].push(name);
+        used.add(name);
+      }
+    }
+  }
+  day.manualLocks = dst;
 }
 
 /* —— 依「鎖定名單」重新排 —— */
@@ -396,11 +440,15 @@ function recomputeWithLocks(key){
   const d3i   = day.d3i   || {};
   const abfHelperOn = !!day.abfHelper;
   const leaveSet = new Set(day.leave || []);
-  const manualLocks = day.manualLocks || {};
+  day.manualLocks = day.manualLocks || {};
 
-  let lockedAll = [];
-  Object.values(manualLocks).forEach(arr=>{ if(Array.isArray(arr)) lockedAll.push(...arr); });
-  const lockedSet = new Set(lockedAll);
+  // 先正規化手動鎖定，移除衝突、違規與請假
+  normalizeLocks(day);
+
+  // 建 pool（先排除手動鎖定與請假）
+  let lockedNames = [];
+  Object.values(day.manualLocks).forEach(arr=>{ if(Array.isArray(arr)) lockedNames.push(...arr); });
+  const lockedSet = new Set(lockedNames);
   let pool = shuffle(PEOPLE.filter(n=>!leaveSet.has(n) && !lockedSet.has(n)));
 
   const results = {};
@@ -409,29 +457,19 @@ function recomputeWithLocks(key){
   set("支援", []);
   set("請假", [...leaveSet]);
 
-  // 先放入鎖定（✅ 不再忽略「支援」，並移出 pool）
-  for (const area of ALL_AREAS) {
-    const lock = manualLocks[area];
-    if (!lock || !lock.length) continue;
-    const good = [];
-    for (const name of lock) {
-      if (area==="請假"||area==="未分派") continue; // 支援不跳過
-      if (!canAssignToArea(name, area, tomoe, d3i)) continue;
-      if (leaveSet.has(name)) continue;
-      good.push(name);
-    }
-    if (good.length) {
-      set(area, good);
-      // ⬇️ 把已鎖定的人從池子移除，避免被派去別區
-      good.forEach(nm => { pool = pool.filter(x => x !== nm); });
+  // 先放入鎖定（直接生效）
+  for (const area of Object.keys(day.manualLocks)){
+    const arr = (day.manualLocks[area]||[]).filter(n => !leaveSet.has(n) && canAssignToArea(n, area, tomoe, d3i));
+    if(arr.length){
+      set(area, arr);
     }
   }
 
-  // 1) 粗篩：奇偶核心＋替補
+  // 1) 粗篩（若未鎖定）
   if(!(results["粗篩"] && results["粗篩"].length)){
     const bothOnLeave = leaveSet.has("佳雯") && leaveSet.has("阿美");
     if (bothOnLeave) {
-      let partners = pool.map((n,i)=>({n,i})).filter(x=>canAssign(x.n,"粗篩"));
+      let partners = pool.map((n,i)=>({n,i})).filter(x=>canAssignBase(x.n,"粗篩"));
       const group = [];
       for (let k=0;k<2 && partners.length;k++){
         const pickIdx = Math.floor(Math.random()*partners.length);
@@ -448,7 +486,7 @@ function recomputeWithLocks(key){
       const idx = pool.indexOf(core);
       if(idx>=0){ group.push(pool[idx]); pool.splice(idx,1); }
       let partners = pool.map((n,i)=>({n,i}))
-        .filter(x=> x.n!=="佳雯" && x.n!=="阿美" && canAssign(x.n,"粗篩"));
+        .filter(x=> x.n!=="佳雯" && x.n!=="阿美" && canAssignBase(x.n,"粗篩"));
       if(partners.length){
         const p = partners[Math.floor(Math.random()*partners.length)];
         group.push(p.n); pool.splice(p.i,1);
@@ -464,7 +502,7 @@ function recomputeWithLocks(key){
   const cdjAllow = allowedSetFor("CDJ", tomoe, d3i);
 
   const takeLocked = (area)=>{
-    const lock = manualLocks[area]||[];
+    const lock = day.manualLocks[area]||[];
     if(lock.length){ set(area, lock.slice()); lock.forEach(n=>{ pool = pool.filter(x=>x!==n); }); return true; }
     return false;
   };
@@ -490,9 +528,9 @@ function recomputeWithLocks(key){
 
   // 3) MNO / PQR / GH（各 1）
   ["MNO","PQR","GH"].forEach(a=>{
-    if(manualLocks[a] && manualLocks[a].length){
-      set(a, manualLocks[a].slice());
-      manualLocks[a].forEach(n=>{ pool = pool.filter(x=>x!==n); });
+    if(day.manualLocks[a] && day.manualLocks[a].length){
+      set(a, day.manualLocks[a].slice());
+      day.manualLocks[a].forEach(n=>{ pool = pool.filter(x=>x!==n); });
     }else{
       if((checked||{})[a]){ const who = pickOne(pool, a, allowedSetFor(a, tomoe, d3i)); if(who) set(a, [who]); }
       else set(a, ["（未開機）"]);
@@ -500,21 +538,21 @@ function recomputeWithLocks(key){
   });
 
   // 4) 洗球（剩餘且允許；再平衡；未分派）
-  if(manualLocks["洗球"] && manualLocks["洗球"].length){
-    set("洗球", manualLocks["洗球"].slice());
-    manualLocks["洗球"].forEach(n=>{ pool = pool.filter(x=>x!==n); });
+  if(day.manualLocks["洗球"] && day.manualLocks["洗球"].length){
+    set("洗球", day.manualLocks["洗球"].slice());
+    day.manualLocks["洗球"].forEach(n=>{ pool = pool.filter(x=>x!==n); });
     set("未分派", pool.slice());
   }else{
-    let washList = pool.filter(n=>canAssign(n,"洗球"));
+    let washList = pool.filter(n=>canAssignBase(n,"洗球"));
     set("洗球", washList);
-    let leftovers = pool.filter(n => !canAssign(n, "洗球"));
+    let leftovers = pool.filter(n => !canAssignBase(n, "洗球"));
     const adjustableAreas = ["ABF","CDJ","MNO","PQR","GH"].filter(a => (checked||{})[a]);
     for (const L of [...leftovers]) {
       for (const area of adjustableAreas) {
         const arr = results[area] || [];
         if (!arr.length) continue;
         if (!canAssignToArea(L, area, tomoe, d3i)) continue;
-        const idx = arr.findIndex(S => S && !String(S).includes("(小幫手)") && canAssign(S, "洗球"));
+        const idx = arr.findIndex(S => S && !String(S).includes("(小幫手)") && canAssignBase(S, "洗球"));
         if (idx >= 0) {
           const S = arr[idx];
           arr[idx] = L;
@@ -530,9 +568,8 @@ function recomputeWithLocks(key){
   }
 
   day.results = results;
-  day.manualLocks = manualLocks;
   store[key] = day; save(store);
-  if(key===activeDate){ drawResults(results, manualLocks, resultBody); drawResults(results, manualLocks, mResultBody); }
+  if(key===activeDate){ drawResults(results, day.manualLocks, resultBody); drawResults(results, day.manualLocks, mResultBody); }
   renderWeek();
 }
 
@@ -544,30 +581,30 @@ function runForDay(key){
   recomputeWithLocks(key);
 }
 
-/* ========= 結果表 + 點名字即換人 ========= */
+/* ========= 結果表 + 點名字即換人（加入獨佔/多選與去重） ========= */
 function drawResults(results, manualLocks, tbody){
   tbody.innerHTML="";
+  const isEditableArea = a => a!=="請假";
   ALL_AREAS.forEach(a=>{
     const tr=document.createElement("tr");
     const tdA=document.createElement("td"); tdA.textContent=a;
 
     const tdP=document.createElement("td");
-    // ✅ 支援可編輯（只有「請假」不可編輯）
-    const isEditable = (a!=="請假");
     tdP.textContent = (results[a] && results[a].length) ? results[a].join("、") : "—";
-    if(isEditable){
+    if(isEditableArea(a)){
       tdP.classList.add("editable","dropdown");
-      tdP.onclick = (e)=>{ e.stopPropagation(); openPicker(tdP, a, results, manualLocks); };
+      tdP.onclick = (e)=>{ e.stopPropagation(); openPicker(tdP, a); };
     }
     tr.append(tdA,tdP); tbody.append(tr);
   });
 }
 
-/* 點名字即可換人（彈窗） */
-function openPicker(td, area, results, manualLocks){
+/* 點名字即可換人（修：單槽獨佔、多槽可切換、標示來源區） */
+function openPicker(td, area){
   closeAnyPicker();
   const store = load();
   const day = store[activeDate] || {};
+  day.manualLocks = day.manualLocks || {};
   const leaveSet = new Set(day.leave || []);
   const tomoe  = day.tomoe || {};
   const d3i    = day.d3i   || {};
@@ -578,32 +615,55 @@ function openPicker(td, area, results, manualLocks){
 
   const hint = document.createElement("div");
   hint.className = "hint";
-  hint.textContent = "點名字即可替換此區人員（其餘自動重排）";
+  hint.textContent = SINGLE_SLOT.has(area)
+    ? "點名字 → 此人將獨佔此區（並從其它區移除）"
+    : "點名字 → 加入/移除此區（會自動從其它區移除，避免重複）";
   picker.append(hint);
 
-  const SINGLE_SLOT = ["ABF","CDJ","MNO","PQR","GH"]; // 支援不是單槽，屬於可多選鎖定
+  const whereLocked = name => findLockedAreaOf(name, day.manualLocks);
+
   PEOPLE.forEach(name=>{
-    const okByLeave = !leaveSet.has(name);
+    const isOnLeave = leaveSet.has(name);
     const okByRule  = allowSet ? allowSet.has(name) : true;
     const okByArea  = canAssignToArea(name, area, tomoe, d3i);
-    const enabled   = okByLeave && okByRule && okByArea;
+    const elsewhere = whereLocked(name);
+    const isHere    = (day.manualLocks[area]||[]).includes(name);
+
+    // 可點條件：不能請假；必須符合規則；（若在別區，仍可點，會搬過來）
+    const enabled   = !isOnLeave && okByRule && okByArea;
 
     const row = document.createElement("div");
     row.className = "row" + (enabled ? "" : " disabled");
     row.style.cursor = enabled ? "pointer" : "default";
+
     const label = document.createElement("span");
-    label.textContent = name + (!enabled ? "（不可選）" : "");
+    let tail = "";
+    if(elsewhere && elsewhere!==area) tail = `（將從${elsewhere}移到此）`;
+    if(isHere) tail = "（已在此）";
+    if(!enabled && isOnLeave) tail = "（請假）";
+    if(!enabled && !okByArea) tail = "（不符合規則）";
+    label.textContent = name + (tail?tail:"");
     row.append(label);
 
     if(enabled){
       row.onclick = ()=>{
         const st=load(); const d=st[activeDate]||{};
         d.manualLocks = d.manualLocks || {};
-        if(SINGLE_SLOT.includes(area)){ d.manualLocks[area] = [name]; }
-        else{
-          const prev = Array.isArray(d.manualLocks[area]) ? d.manualLocks[area].slice() : [];
-          if(!prev.includes(name)) prev.push(name);
-          d.manualLocks[area] = prev;
+
+        if(SINGLE_SLOT.has(area)){
+          // 獨佔：先從所有區移除，再放入此區單人
+          removeFromAllAreas(d.manualLocks, name);
+          d.manualLocks[area] = [name];
+        }else{
+          // 多槽：切換（toggle）
+          const list = Array.isArray(d.manualLocks[area]) ? d.manualLocks[area] : [];
+          if(list.includes(name)){
+            d.manualLocks[area] = list.filter(x=>x!==name);
+          }else{
+            // 新增前先從其它區移除，確保不重複
+            removeFromAllAreas(d.manualLocks, name);
+            d.manualLocks[area] = [...list, name];
+          }
         }
         st[activeDate]=d; save(st);
         recomputeWithLocks(activeDate);
@@ -617,7 +677,7 @@ function openPicker(td, area, results, manualLocks){
   actions.className = "actions";
   const btnClear = document.createElement("button");
   btnClear.className = "clear";
-  btnClear.textContent = "清空鎖定";
+  btnClear.textContent = "清空此區鎖定";
   btnClear.onclick = ()=>{
     const st=load(); const d=st[activeDate]||{};
     d.manualLocks = d.manualLocks || {}; d.manualLocks[area] = [];
@@ -653,7 +713,7 @@ function persistDay(patch){
   renderWeek();
 }
 
-/* 共用控制：小幫手 & 按鈕（含未選日期提示） */
+/* ====== 共用控制：小幫手 & 按鈕（含未選日期提示） ====== */
 document.getElementById("abfHelper").addEventListener('change', e=>{ if(!activeDate) return; persistDay({abfHelper:e.target.checked}); });
 
 document.getElementById("run").onclick = ()=>{
@@ -729,8 +789,7 @@ function onDragEnd(){
   dragging = false;
 }
 
-const activeArea = [drawer, dragHandle];
-activeArea.forEach(el=>{
+[drawer, dragHandle].forEach(el=>{
   el.addEventListener('touchstart', e=>{ onDragStart(e.touches[0].clientY); }, {passive:true});
   el.addEventListener('touchmove',  e=>{ onDragMove(e.touches[0].clientY); }, {passive:true});
   el.addEventListener('touchend',   e=>{ onDragEnd(); }, {passive:true});
