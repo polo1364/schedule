@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>一週班表</title>
+<style>
+  body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;margin:0;background:#f3f4f6}
+  header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#1f2937;color:#fff}
+  header h1{font-size:20px;margin:0}
+  .weekbar{display:flex;gap:8px;align-items:center}
+  .weekbar button{padding:6px 12px;font-size:14px;border:none;border-radius:6px;background:#374151;color:#fff;cursor:pointer}
+  .weekbar button:hover{background:#4b5563}
+
+  /* === 版面：上方週曆，下方設定 === */
+  .container{
+    display:grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    grid-template-areas:
+      "cal"
+      "panel";
+  }
+  .grid{
+    grid-area: cal;
+    display:grid;
+    grid-template-columns:repeat(7,1fr);
+    gap:12px;
+    padding:12px 16px;
+  }
+  .side{
+    grid-area: panel;
+    border-left:none;
+    border-top:1px solid #e5e7eb;
+    background:#fff;
+    padding:16px;
+    box-shadow:0 -4px 16px rgba(0,0,0,.05);
+  }
+
+  /* === 日期卡片扁平化 === */
+  .day{
+    background:#fff;border-radius:10px;border:1px solid #e5e7eb;
+    box-shadow:0 1px 4px rgba(0,0,0,.06);padding:8px;min-height:72px;
+    display:flex;flex-direction:column;cursor:pointer;
+  }
+  .day:hover{background:#f9fafb}
+  .day .date{
+    font-size:13px;font-weight:600;color:#111827;background:#f3f4f6;border:1px solid #e5e7eb;
+    border-radius:8px;padding:4px 8px;margin-bottom:6px;display:inline-block;
+  }
+
+  /* ===== 卡片摘要：多行、兩欄（區域 / 人員） ===== */
+  .day .summary{
+    white-space: normal;          /* 可換行 */
+    overflow: visible;
+    text-overflow: initial;
+    font-size: 12px;
+    color: #374151;
+  }
+  .sumgrid{
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .srow{
+    display: grid;
+    grid-template-columns: 46px 1fr; /* 左：區名 / 右：人員 */
+    align-items: start;
+    column-gap: 6px;
+    line-height: 1.35;
+  }
+  .srow .k{ color:#6b7280; font-weight:600; }
+  .srow .v{ color:#111827; }
+
+  /* 面板元件 */
+  .side h2{margin:0 0 12px;font-size:18px;color:#111827}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{border:1px solid #d1d5db;border-radius:20px;padding:4px 10px;background:#f9fafb;font-size:13px}
+  .areas{display:flex;flex-wrap:wrap;gap:10px}
+  .areas label{display:flex;gap:6px;align-items:center;padding:6px 10px;border:1px solid #d1d5db;border-radius:8px;background:#f9fafb;font-size:14px;cursor:pointer}
+  .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+  .btns button{padding:8px 14px;border:none;border-radius:6px;background:#2563eb;color:#fff;font-size:14px;cursor:pointer}
+  .btns button:hover{background:#1d4ed8}
+
+  table{width:100%;border-collapse:collapse;margin-top:12px}
+  th,td{border:1px solid #d1d5db;padding:8px 10px;text-align:center;font-size:15px}
+  th{background:#f3f4f6;font-weight:600}
+
+  /* 小選項（TOMOE / D3I） */
+  .optBox{margin-left:8px;font-size:12px;color:#444;display:none;align-items:center;gap:4px}
+  .optBox input{ transform:scale(1.1); }
+
+  /* 下拉（點名字即換人） */
+  td.editable{ cursor:pointer; }
+  td.editable:hover{ background:#f9fafb; }
+  .dropdown{ position:relative; }
+  .picker{
+    position:absolute; z-index:1000; background:#fff; border:1px solid #d1d5db;
+    border-radius:10px; box-shadow:0 8px 20px rgba(0,0,0,.12); padding:10px;
+    min-width:220px; max-height:340px; overflow:auto; right:0;
+  }
+  .picker .row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;}
+  .picker .row:hover{background:#f3f4f6;}
+  .picker .row.disabled{opacity:.45; pointer-events:none;}
+  .picker .hint{font-size:12px;color:#6b7280;margin:0 2px 8px;}
+  .picker .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+  .picker .actions button{padding:6px 10px;border:none;border-radius:6px;cursor:pointer}
+  .picker .actions .clear{background:#e5e7eb}
+
+  @media(max-width:1024px){
+    .grid{gap:10px;padding:10px}
+    .side{box-shadow:none;border-top:1px solid #e5e7eb}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>一週班表</h1>
+  <div class="weekbar">
+    <button id="prevWeek">← 上一週</button>
+    <div id="weekLabel"></div>
+    <button id="nextWeek">下一週 →</button>
+  </div>
+</header>
+
+<div class="container">
+  <div class="grid" id="grid"></div>
+  <aside class="side" id="side">
+    <h2 id="panelTitle">請從上方選日期</h2>
+    <div id="panel" style="display:none">
+      <div class="areas" id="areaControls"></div>
+      <div style="margin:10px 0">
+        <label style="display:inline-flex;gap:6px;align-items:center">
+          <input type="checkbox" id="abfHelper"> ABF 小幫手
+        </label>
+      </div>
+      <div class="chips" id="peopleChips"></div>
+      <div style="color:#6b7280;font-size:12px;margin-top:6px">勾選 = 請假</div>
+      <div class="btns">
+        <button id="run">⚡ 自動排班（此日）</button>
+        <button id="clearResults">清空結果</button>
+        <button id="saveOnly">只存請假/開機</button>
+      </div>
+      <table>
+        <thead><tr><th>工作區域</th><th>人員</th></tr></thead>
+        <tbody id="resultBody"></tbody>
+      </table>
+    </div>
+  </aside>
+</div>
+
+<script>
+/* ========= 常數與資料 ========= */
+const LS_KEY = "weekly_scheduler_full_v8_click_to_swap";
+const PEOPLE = ["佳雯","盈儒","忻潔","阿美","美琪","小瑰","靜媚","韶湄","汶倩","麗凰","奕瑄","小雯","惠玲"];
+const AREAS_WITH_CHECK = ["ABF","CDJ","MNO","PQR","GH"];
+const AREAS_FIXED = ["粗篩","洗球","支援","請假"];
+const ALL_AREAS = [...AREAS_WITH_CHECK, ...AREAS_FIXED, "未分派"];
+
+/* 限制規則（不顯示於畫面） */
+const CANNOT = { "洗球": new Set(["阿美","佳雯","靜媚"]), "粗篩": new Set(["靜媚"]) };
+const ALLOW_ONLY = { "美琪": new Set(["ABF","helper","洗球"]) }; // 美琪只能 ABF / 小幫手 / 洗球
+
+/* TOMOE / D3I 限制 */
+const TOMOE_ALLOWED = new Set(["佳雯","惠玲"]);
+const D3I_ALLOWED   = new Set(["美琪","佳雯","惠玲"]);
+
+/* ========= 小工具 ========= */
+const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+function weekRange(anchor){ const d=new Date(anchor); const day=(d.getDay()+6)%7; d.setDate(d.getDate()-day); return Array.from({length:7},(_,i)=>{const x=new Date(d); x.setDate(d.getDate()+i); return x;}); }
+function load(){ try{return JSON.parse(localStorage.getItem(LS_KEY)||"{}")}catch{return{}} }
+function save(s){ localStorage.setItem(LS_KEY, JSON.stringify(s)); }
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function intersectSets(a,b){ const out=new Set(); for(const v of a){ if(b.has(v)) out.add(v); } return out; }
+
+/* ========= 摘要產生（固定順序＋未開機不顯示） ========= */
+function buildSummary(dayData){
+  const res = (dayData && dayData.results) || {};
+  const checked = (dayData && dayData.checked) || {};
+  const order = ["ABF","CDJ","MNO","PQR","GH","粗篩","洗球","支援","請假"];
+  const rows = order.map(area=>{
+    const arr = res[area] || [];
+    let val = "";
+    if (["ABF","CDJ","MNO","PQR","GH"].includes(area) && !checked[area]) return "";
+    if (arr.length){
+      if (area === "洗球"){
+        const MAX=4;
+        val = (arr.length>MAX) ? `${arr.slice(0,MAX).join("、")} 等 +${arr.length-MAX}` : arr.join("、");
+      }else{
+        val = arr.join("、");
+      }
+    }else{
+      return "";
+    }
+    return `<div class="srow"><div class="k">${area}</div><div class="v">${val}</div></div>`;
+  }).filter(Boolean);
+  return rows.length ? `<div class="sumgrid">${rows.join("")}</div>` : "（尚未排班）";
+}
+
+/* ========= 週格 ========= */
+let currentMonday = weekRange(new Date())[0];
+const grid = document.getElementById("grid");
+const weekLabel = document.getElementById("weekLabel");
+document.getElementById("prevWeek").onclick = ()=>{ currentMonday.setDate(currentMonday.getDate()-7); renderWeek(); };
+document.getElementById("nextWeek").onclick = ()=>{ currentMonday.setDate(currentMonday.getDate()+7); renderWeek(); };
+
+function renderWeek(){
+  const days = weekRange(currentMonday);
+  weekLabel.textContent = `${fmt(days[0])} ～ ${fmt(days[6])}`;
+  grid.innerHTML="";
+  const store = load();
+
+  days.forEach(d=>{
+    const key = fmt(d);
+    const card = document.createElement("div");
+    card.className="day";
+    card.onclick = ()=> openDay(key);
+    const title = document.createElement("div");
+    title.className="date";
+    title.textContent = `${key}`;
+    const sum = document.createElement("div");
+    sum.className="summary";
+    const dayData = store[key]||{};
+    const hasAny = dayData.results && Object.values(dayData.results).some(v => Array.isArray(v) && v.length);
+    sum.innerHTML = hasAny ? buildSummary(dayData) : "（尚未排班）";
+    card.append(title,sum);
+    grid.append(card);
+  });
+}
+
+/* ========= 右側每日面板 ========= */
+const panel = document.getElementById("panel");
+const panelTitle = document.getElementById("panelTitle");
+const peopleChips = document.getElementById("peopleChips");
+const resultBody = document.getElementById("resultBody");
+const areaControls = document.getElementById("areaControls");
+let activeDate = null;
+
+/* 產生每個區域的「開機」+（TOMOE / D3I）UI */
+function buildAreaControls(){
+  areaControls.innerHTML="";
+  AREAS_WITH_CHECK.forEach(area=>{
+    const wrap = document.createElement("label");
+    Object.assign(wrap.style,{
+      display:"flex",alignItems:"center",gap:"6px",
+      border:"1px solid #d1d5db",padding:"6px 10px",
+      borderRadius:"8px",background:"#f9fafb",cursor:"pointer",fontSize:"14px"
+    });
+
+    const cb = document.createElement("input");
+    cb.type="checkbox"; cb.dataset.area=area;
+
+    const nameNode = document.createTextNode(area);
+
+    const tomoeBox = document.createElement("span");
+    tomoeBox.className="optBox";
+    const tomoeCb = document.createElement("input");
+    tomoeCb.type="checkbox"; tomoeCb.dataset.tomoe=area;
+    tomoeBox.append(tomoeCb, document.createTextNode("TOMOE"));
+
+    const d3iBox = document.createElement("span");
+    d3iBox.className="optBox";
+    const d3iCb = document.createElement("input");
+    d3iCb.type="checkbox"; d3iCb.dataset.d3i=area;
+    d3iBox.append(d3iCb, document.createTextNode("D3I"));
+    if(area !== "ABF") d3iBox.style.display = "none";
+
+    cb.addEventListener("change", ()=>{
+      if(!activeDate) return;
+      const store=load(); const day=store[activeDate]||{};
+      day.checked=day.checked||{};
+      day.checked[area]=cb.checked;
+
+      if(!cb.checked){
+        tomoeCb.checked=false;
+        d3iCb.checked=false;
+        day.tomoe = day.tomoe || {}; day.tomoe[area]=false;
+        day.d3i   = day.d3i   || {}; day.d3i[area]=false;
+      }
+      store[activeDate]=day; save(store);
+
+      tomoeBox.style.display = cb.checked ? "inline-flex":"none";
+      if(area==="ABF") d3iBox.style.display = cb.checked ? "inline-flex":"none";
+
+      renderWeek();
+    });
+
+    tomoeCb.addEventListener("change", ()=>{
+      if(!activeDate) return;
+      const store=load(); const day=store[activeDate]||{};
+      day.tomoe=day.tomoe||{};
+      day.tomoe[area]=tomoeCb.checked;
+      store[activeDate]=day; save(store);
+    });
+
+    d3iCb.addEventListener("change", ()=>{
+      if(!activeDate) return;
+      const store=load(); const day=store[activeDate]||{};
+      day.d3i=day.d3i||{};
+      day.d3i[area]=d3iCb.checked;
+      store[activeDate]=day; save(store);
+    });
+
+    wrap.append(cb, nameNode, tomoeBox, d3iBox);
+    areaControls.append(wrap);
+  });
+}
+
+function openDay(key){
+  activeDate = key;
+  panelTitle.textContent = `設定：${key}`;
+  panel.style.display = "";
+
+  const store = load();
+  const day = store[key] || {};
+  const leave = new Set(day.leave || []);
+  const checked = day.checked || {};
+  const tomoe = day.tomoe || {};
+  const d3i   = day.d3i   || {};
+  const abfHelper = !!day.abfHelper;
+
+  document.querySelectorAll('[data-area]').forEach(el=>{
+    const area = el.dataset.area;
+    el.checked = !!checked[area];
+
+    const tomoeEl = el.parentElement.querySelector('[data-tomoe]');
+    if(tomoeEl){
+      tomoeEl.checked = !!tomoe[area];
+      tomoeEl.parentElement.style.display = el.checked ? "inline-flex":"none";
+    }
+    const d3iEl = el.parentElement.querySelector('[data-d3i]');
+    if(d3iEl){
+      d3iEl.checked = !!d3i[area];
+      d3iEl.parentElement.style.display = (el.checked && area==="ABF") ? "inline-flex":"none";
+    }
+  });
+  document.getElementById("abfHelper").checked = abfHelper;
+
+  peopleChips.innerHTML="";
+  PEOPLE.forEach(name=>{
+    const label = document.createElement("label");
+    label.className="chip";
+    const cb = document.createElement("input"); cb.type="checkbox"; cb.checked = leave.has(name);
+    cb.onchange = ()=> { if(cb.checked) leave.add(name); else leave.delete(name); persistDay({leave:[...leave]}); };
+    label.append(cb, document.createTextNode(" "+name));
+    peopleChips.append(label);
+  });
+
+  drawResults(day.results||{}, day.manualLocks||{});
+}
+
+/* ========= 規則引擎 ========= */
+function canAssign(name, area){
+  if (ALLOW_ONLY[name]) return ALLOW_ONLY[name].has(area);
+  if (CANNOT[area] && CANNOT[area].has(name)) return false;
+  return true;
+}
+function pickOne(pool, area, allowSet=null){
+  let cands = pool.map((n,i)=>({n,i})).filter(x=>canAssign(x.n, area));
+  if(allowSet){ cands = cands.filter(x=>allowSet.has(x.n)); }
+  if(!cands.length) return null;
+  const pick = cands[Math.floor(Math.random()*cands.length)];
+  pool.splice(pick.i,1);
+  return pick.n;
+}
+function coreForDate(dateStr){
+  const d = new Date(dateStr);
+  return (d.getDate() % 2 === 1) ? "佳雯" : "阿美";
+}
+function allowedSetFor(area, tomoe, d3i){
+  if(area === "ABF"){
+    const tOn = !!tomoe["ABF"];
+    const dOn = !!d3i["ABF"];
+    if(tOn && dOn) return intersectSets(TOMOE_ALLOWED, D3I_ALLOWED);
+    if(tOn) return TOMOE_ALLOWED;
+    if(dOn) return D3I_ALLOWED;
+    return null;
+  }else{
+    if(!!tomoe[area]) return TOMOE_ALLOWED;
+    return null;
+  }
+}
+function canAssignToArea(name, area, tomoe, d3i){
+  if(!canAssign(name, area)) return false;
+  const allow = allowedSetFor(area, tomoe, d3i);
+  return allow ? allow.has(name) : true;
+}
+
+/* —— 依「鎖定名單」重新排 —— */
+function recomputeWithLocks(key){
+  const store = load();
+  const day = store[key] || {};
+  const checked = day.checked || {};
+  const tomoe = day.tomoe || {};
+  const d3i   = day.d3i   || {};
+  const abfHelperOn = !!day.abfHelper;
+  const leaveSet = new Set(day.leave || []);
+  const manualLocks = day.manualLocks || {};
+
+  let lockedAll = [];
+  Object.values(manualLocks).forEach(arr=>{ if(Array.isArray(arr)) lockedAll.push(...arr); });
+  const lockedSet = new Set(lockedAll);
+  let pool = shuffle(PEOPLE.filter(n=>!leaveSet.has(n) && !lockedSet.has(n)));
+
+  const results = {};
+  const set = (area, arr)=>{ results[area] = (arr && arr.length)? arr.slice():[]; };
+
+  set("支援", []);
+  set("請假", [...leaveSet]);
+
+  // 先放入鎖定（不合法或請假會被忽略）
+  for (const area of ALL_AREAS) {
+    const lock = manualLocks[area];
+    if (!lock || !lock.length) continue;
+    const good = [];
+    for (const name of lock) {
+      if (area==="請假"||area==="支援"||area==="未分派") continue;
+      if (!canAssignToArea(name, area, tomoe, d3i)) continue;
+      if (leaveSet.has(name)) continue;
+      good.push(name);
+    }
+    if (good.length) set(area, good);
+  }
+
+  // 1) 粗篩（日期奇偶 → 核心；兩人都請假 → 補兩位隨機）
+  if(!(results["粗篩"] && results["粗篩"].length)){
+    const bothOnLeave = leaveSet.has("佳雯") && leaveSet.has("阿美");
+    if (bothOnLeave) {
+      let partners = pool.map((n,i)=>({n,i})).filter(x=>canAssign(x.n,"粗篩"));
+      const group = [];
+      for (let k=0;k<2 && partners.length;k++){
+        const pickIdx = Math.floor(Math.random()*partners.length);
+        const pick = partners.splice(pickIdx,1)[0];
+        group.push(pick.n);
+        const rm = pool.indexOf(pick.n);
+        if (rm >= 0) pool.splice(rm,1);
+      }
+      set("粗篩", group.length ? group : ["缺人"]);
+    } else {
+      let core = coreForDate(key);
+      if (leaveSet.has(core)) core = (core==="佳雯") ? "阿美" : "佳雯";
+      const group = [];
+      const idx = pool.indexOf(core);
+      if(idx>=0){ group.push(pool[idx]); pool.splice(idx,1); }
+      let partners = pool.map((n,i)=>({n,i}))
+        .filter(x=> x.n!=="佳雯" && x.n!=="阿美" && canAssign(x.n,"粗篩"));
+      if(partners.length){
+        const p = partners[Math.floor(Math.random()*partners.length)];
+        group.push(p.n); pool.splice(p.i,1);
+      }
+      set("粗篩", group.length ? group : ["缺人"]);
+    }
+  }else{
+    for(const n of results["粗篩"]) pool = pool.filter(x=>x!==n);
+  }
+
+  // 2) ABF / CDJ（含小幫手）
+  const abfAllow = allowedSetFor("ABF", tomoe, d3i);
+  const cdjAllow = allowedSetFor("CDJ", tomoe, d3i);
+
+  const takeLocked = (area)=>{
+    const lock = manualLocks[area]||[];
+    if(lock.length){
+      set(area, lock.slice());
+      lock.forEach(n=>{ pool = pool.filter(x=>x!==n); });
+      return true;
+    }
+    return false;
+  };
+  const abfLocked = takeLocked("ABF");
+  const cdjLocked = takeLocked("CDJ");
+
+  if(!abfLocked || !cdjLocked){
+    if(checked["ABF"] && checked["CDJ"] && abfHelperOn){
+      if(!abfLocked){ const abfMain = pickOne(pool,"ABF", abfAllow); if(abfMain) set("ABF", [ ...(results["ABF"]||[]), abfMain ]); }
+      if(!cdjLocked){ const cdjMain = pickOne(pool,"CDJ", cdjAllow); if(cdjMain) set("CDJ", [ ...(results["CDJ"]||[]), cdjMain ]); }
+      const helper  = pickOne(pool,"helper", null);
+      if(helper){
+        set("ABF", [ ...(results["ABF"]||[]), `${helper}(小幫手)` ]);
+        set("CDJ", [ ...(results["CDJ"]||[]), `${helper}(小幫手)` ]);
+      }
+    }else{
+      if(checked["ABF"] && !abfLocked){ const who=pickOne(pool,"ABF", abfAllow); if(who) set("ABF", [who]); }
+      if(!checked["ABF"] && !abfLocked) set("ABF", ["（未開機）"]);
+      if(checked["CDJ"] && !cdjLocked){ const who=pickOne(pool,"CDJ", cdjAllow); if(who) set("CDJ", [who]); }
+      if(!checked["CDJ"] && !cdjLocked) set("CDJ", ["（未開機）"]);
+    }
+  }
+
+  // 3) MNO / PQR / GH（各 1）
+  ["MNO","PQR","GH"].forEach(a=>{
+    if(manualLocks[a] && manualLocks[a].length){
+      set(a, manualLocks[a].slice());
+      manualLocks[a].forEach(n=>{ pool = pool.filter(x=>x!==n); });
+    }else{
+      if((checked||{})[a]){ const who = pickOne(pool, a, allowedSetFor(a, tomoe, d3i)); if(who) set(a, [who]); }
+      else set(a, ["（未開機）"]);
+    }
+  });
+
+  // 4) 洗球（剩餘且允許；再平衡；未分派）
+  if(manualLocks["洗球"] && manualLocks["洗球"].length){
+    set("洗球", manualLocks["洗球"].slice());
+    manualLocks["洗球"].forEach(n=>{ pool = pool.filter(x=>x!==n); });
+    set("未分派", pool.slice());
+  }else{
+    let washList = pool.filter(n=>canAssign(n,"洗球"));
+    set("洗球", washList);
+    let leftovers = pool.filter(n => !canAssign(n, "洗球"));
+    const adjustableAreas = ["ABF","CDJ","MNO","PQR","GH"].filter(a => (checked||{})[a]);
+    for (const L of [...leftovers]) {
+      for (const area of adjustableAreas) {
+        const arr = results[area] || [];
+        if (!arr.length) continue;
+        if (!canAssignToArea(L, area, tomoe, d3i)) continue;
+        const idx = arr.findIndex(S => S && !String(S).includes("(小幫手)") && canAssign(S, "洗球"));
+        if (idx >= 0) {
+          const S = arr[idx];
+          arr[idx] = L;
+          results[area] = arr.slice();
+          washList = washList.concat([S]);
+          set("洗球", washList);
+          leftovers = leftovers.filter(x => x !== L);
+          break;
+        }
+      }
+    }
+    set("未分派", leftovers);
+  }
+
+  day.results = results;
+  day.manualLocks = manualLocks;
+  store[key] = day; save(store);
+  if(key===activeDate){ drawResults(results, manualLocks); }
+  renderWeek();
+}
+
+/* ========= 自動排班 ========= */
+function runForDay(key){
+  const store = load();
+  const day = store[key] || {};
+  day.manualLocks = day.manualLocks || {};
+  store[key]=day; save(store);
+  recomputeWithLocks(key);
+}
+
+/* ========= 結果表 + 點名字即換人 ========= */
+function drawResults(results, manualLocks){
+  resultBody.innerHTML="";
+  ALL_AREAS.forEach(a=>{
+    const tr=document.createElement("tr");
+    const tdA=document.createElement("td"); tdA.textContent=a;
+
+    const tdP=document.createElement("td");
+    const isEditable = (a!=="請假" && a!=="支援");
+    tdP.textContent = (results[a] && results[a].length) ? results[a].join("、") : "—";
+    if(isEditable){
+      tdP.classList.add("editable","dropdown");
+      tdP.onclick = ()=> openPicker(tdP, a, results, manualLocks); // 點了彈出名單，點名字立即替換
+    }
+    tr.append(tdA,tdP); resultBody.append(tr);
+  });
+}
+
+/* 下拉【點名字即可換人】（僅顯示允許＋未請假；點一下立即生效、關閉） */
+function openPicker(td, area, results, manualLocks){
+  closeAnyPicker();
+  const store = load();
+  const day = store[activeDate] || {};
+  const leaveSet = new Set(day.leave || []);
+  const tomoe  = day.tomoe || {};
+  const d3i    = day.d3i   || {};
+  const allowSet = allowedSetFor(area, tomoe, d3i);
+
+  const picker = document.createElement("div");
+  picker.className = "picker";
+
+  const hint = document.createElement("div");
+  hint.className = "hint";
+  hint.textContent = "點名字即可替換此區人員（其餘自動重排）";
+  picker.append(hint);
+
+  const SINGLE_SLOT = ["ABF","CDJ","MNO","PQR","GH"]; // 單槽區
+
+  PEOPLE.forEach(name=>{
+    const okByLeave = !leaveSet.has(name);
+    const okByRule  = allowSet ? allowSet.has(name) : true;
+    const okByArea  = canAssignToArea(name, area, tomoe, d3i);
+    const enabled   = okByLeave && okByRule && okByArea;
+
+    const row = document.createElement("div");
+    row.className = "row" + (enabled ? "" : " disabled");
+    row.style.cursor = enabled ? "pointer" : "default";
+    const label = document.createElement("span");
+    label.textContent = name + (!enabled ? "（不可選）" : "");
+    row.append(label);
+
+    if(enabled){
+      row.onclick = ()=>{
+        const st=load(); const d=st[activeDate]||{};
+        d.manualLocks = d.manualLocks || {};
+
+        if(SINGLE_SLOT.includes(area)){
+          // 單槽：覆蓋為 [name]
+          d.manualLocks[area] = [name];
+        }else{
+          // 多槽（粗篩/洗球）：加入鎖定名單（去重）
+          const prev = Array.isArray(d.manualLocks[area]) ? d.manualLocks[area].slice() : [];
+          if(!prev.includes(name)) prev.push(name);
+          d.manualLocks[area] = prev;
+        }
+
+        st[activeDate]=d; save(st);
+        recomputeWithLocks(activeDate);
+        closeAnyPicker();
+      };
+    }
+
+    picker.append(row);
+  });
+
+  // 清空鎖定
+  const actions = document.createElement("div");
+  actions.className = "actions";
+  const btnClear = document.createElement("button");
+  btnClear.className = "clear";
+  btnClear.textContent = "清空鎖定";
+  btnClear.onclick = ()=>{
+    const st=load(); const d=st[activeDate]||{};
+    d.manualLocks = d.manualLocks || {};
+    d.manualLocks[area] = [];
+    st[activeDate]=d; save(st);
+    recomputeWithLocks(activeDate);
+    closeAnyPicker();
+  };
+  actions.append(btnClear);
+  picker.append(actions);
+
+  td.appendChild(picker);
+
+  const rect = picker.getBoundingClientRect();
+  const vh = window.innerHeight;
+  if(rect.bottom > vh) picker.style.maxHeight = (vh - rect.top - 12) + "px";
+
+  setTimeout(()=>{
+    const closer = (e)=>{
+      if(!picker.contains(e.target)){ closeAnyPicker(); document.removeEventListener("mousedown", closer); }
+    };
+    document.addEventListener("mousedown", closer);
+  },0);
+}
+function closeAnyPicker(){ document.querySelectorAll(".picker").forEach(p=>p.remove()); }
+
+function persistDay(patch){
+  if(!activeDate) return;
+  const store = load();
+  const day = store[activeDate] || {};
+  store[activeDate] = {...day, ...patch};
+  save(store);
+  renderWeek();
+}
+
+/* 面板按鈕 */
+document.getElementById("abfHelper").addEventListener('change', e=>{
+  if(!activeDate) return; persistDay({abfHelper: e.target.checked});
+});
+document.getElementById("run").onclick = ()=>{ if(activeDate) runForDay(activeDate); };
+document.getElementById("clearResults").onclick = ()=>{
+  if(!activeDate) return;
+  const store=load(); store[activeDate]=store[activeDate]||{}; store[activeDate].results={}; store[activeDate].manualLocks={}; save(store);
+  drawResults({}, {}); renderWeek();
+};
+document.getElementById("saveOnly").onclick = ()=>{ if(activeDate) alert("已保存開機 / 小幫手 / TOMOE / D3I / 請假設定。"); };
+
+/* 初始化 */
+buildAreaControls();
+renderWeek();
+</script>
+</body>
+</html>
