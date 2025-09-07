@@ -2,228 +2,476 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <title>自動排班表</title>
 <style>
-body{font-family:"Microsoft JhengHei",sans-serif;margin:0;background:#f3f4f6;color:#111}
-header{position:sticky;top:0;background:#1f2937;color:#fff;padding:8px;z-index:50;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-header button{border:none;background:#3b82f6;color:#fff;padding:6px 10px;border-radius:8px;cursor:pointer}
-header button:hover{background:#2563eb}
-.weekbar{display:flex;gap:8px;align-items:center}
-.grid{display:grid;gap:8px;padding:8px}
-@media(min-width:600px){.grid{grid-template-columns:repeat(2,1fr)}}
-@media(min-width:900px){.grid{grid-template-columns:repeat(4,1fr)}}
-@media(min-width:1280px){.grid{grid-template-columns:repeat(7,1fr)}}
-.day{background:#fff;border:1px solid #ddd;border-radius:8px;padding:8px;cursor:pointer}
-.date{font-weight:bold;margin-bottom:4px}
-.summary{font-size:12px;color:#444}
-.side{padding:12px;background:#fff;border-top:1px solid #ddd}
-table{width:100%;border-collapse:collapse;margin-top:8px;background:#fff}
-th,td{border:1px solid #ddd;padding:6px;text-align:center}
-td.editable span.name{cursor:pointer;padding:2px 4px;border-radius:4px;display:inline-block}
-td.editable span.name:hover{background:#eee}
-.picker{position:absolute;z-index:100;background:#fff;border:1px solid #ccc;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.2);padding:8px;max-height:50vh;overflow:auto}
-.picker .row{padding:4px 8px;cursor:pointer;border-radius:6px}
-.picker .row:hover{background:#eee}
-.picker .row.disabled{color:#999;cursor:not-allowed}
-.k{color:#6b7280;font-weight:bold}
+  :root{
+    --bg:#f3f4f6; --card:#fff; --text:#111827; --muted:#6b7280; --border:#e5e7eb;
+    --accent:#2563eb; --accent-2:#1d4ed8; --shadow:0 1px 4px rgba(0,0,0,.06);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0b0f14; --card:#121721; --text:#e5e7eb; --muted:#9aa4b2; --border:#1f2733;
+      --accent:#3b82f6; --accent-2:#2563eb; --shadow:0 1px 4px rgba(0,0,0,.35);
+    }
+  }
+  *{box-sizing:border-box}
+  body{font-family:"Microsoft JhengHei","Noto Sans TC",system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:var(--bg);color:var(--text)}
+  header{position:sticky;top:0;z-index:50;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:10px 12px;background:#1f2937;color:#fff}
+  .leftwrap{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  header button{border:none;background:#3b82f6;color:#fff;padding:8px 12px;border-radius:9px;cursor:pointer}
+  header button:hover{background:#2563eb}
+  #weekLabel{font-size:14px;opacity:.9}
+  .grid{display:grid;gap:12px;padding:12px}
+  @media(min-width:600px){.grid{grid-template-columns:repeat(2,1fr)}}
+  @media(min-width:900px){.grid{grid-template-columns:repeat(4,1fr)}}
+  @media(min-width:1280px){.grid{grid-template-columns:repeat(7,1fr)}}
+
+  .day{border:1px solid var(--border);border-radius:12px;padding:8px;cursor:pointer;box-shadow:var(--shadow);transition:all .15s ease}
+  .day .date{font-weight:700;margin-bottom:4px;font-size:13px;border:1px solid var(--border);display:inline-block;border-radius:8px;padding:4px 8px}
+  .day .summary{font-size:12px}
+
+  /* 預設灰（未選）／選中顯白 */
+  .day.inactive{background:#d1d5db;color:#6b7280;opacity:.85}
+  .day.inactive .date{background:#e5e7eb;color:#6b7280}
+  .day.active{background:var(--card);color:var(--text);opacity:1}
+  .day.active .date{background:rgba(148,163,184,.18);color:var(--text)}
+
+  .side{padding:12px;background:var(--card);border-top:1px solid var(--border)}
+  .panelGrid{display:grid;grid-template-columns:1fr;gap:12px}
+  @media(min-width:1000px){.panelGrid{grid-template-columns:320px 1fr}}
+  .card{border:1px solid var(--border);border-radius:12px;padding:10px;background:var(--card)}
+  .card h3{margin:0 0 8px 0;font-size:15px}
+  .areaCtrl{display:flex;flex-direction:column;gap:8px}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .row label{display:inline-flex;gap:6px;align-items:center}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{border:1px solid var(--border);border-radius:999px;padding:6px 10px;background:rgba(148,163,184,.12);display:inline-flex;gap:8px;align-items:center}
+  .chip input{width:18px;height:18px}
+
+  table{width:100%;border-collapse:collapse;background:var(--card)}
+  th,td{border:1px solid var(--border);padding:8px;text-align:center}
+  th{background:rgba(148,163,184,.18)}
+  td.editable span.name{cursor:pointer;padding:2px 4px;border-radius:4px;display:inline-block}
+  td.editable span.name:hover{background:rgba(148,163,184,.18)}
+
+  .picker{position:absolute;z-index:100;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:8px;max-height:55vh;overflow:auto;min-width:220px}
+  .picker .row{padding:6px 8px;border-radius:8px}
+  .picker .row:hover{background:rgba(148,163,184,.12)}
+  .picker .row.disabled{opacity:.45;pointer-events:none}
+
+  .muted{color:var(--muted);font-size:12px}
+  .k{color:var(--muted);font-weight:700}
 </style>
 </head>
 <body>
 <header>
-  <div class="weekbar">
+  <div class="leftwrap">
     <button id="prevWeek">← 上一週</button>
     <div id="weekLabel"></div>
     <button id="nextWeek">下一週 →</button>
   </div>
-  <button id="autoWeek">⚡ 一鍵自動排整週</button>
-  <button id="autoToday">⚡ 自動排當天</button>
+  <div class="leftwrap">
+    <button id="autoWeek">⚡ 一鍵自動排整週</button>
+    <button id="autoToday">⚡ 自動排當天</button>
+  </div>
 </header>
 
 <div class="grid" id="grid"></div>
 
-<div class="side">
-  <h2 id="panelTitle">請選日期</h2>
-  <table>
-    <thead><tr><th>工作區域</th><th>人員</th></tr></thead>
-    <tbody id="resultBody"></tbody>
-  </table>
-  <div style="font-size:12px;color:#6b7280;margin-top:6px">
-    小技巧：點某個名字可直接替換他；不合規的選項會顯示「不可」且無法選取。
+<section class="side">
+  <div class="panelGrid">
+    <!-- 設定側欄 -->
+    <div class="card">
+      <h3 id="panelTitle">請先點上方某一天（卡片灰色＝未選）</h3>
+      <div class="areaCtrl" id="ctrls" style="display:none">
+        <div class="row"><label><input type="checkbox" id="abfOn"> ABF 開機</label> <label><input type="checkbox" id="abfTomoe"> TOMOE</label> <label><input type="checkbox" id="abfD3i"> D3I</label></div>
+        <div class="row"><label><input type="checkbox" id="cdjOn"> CDJ 開機</label> <label><input type="checkbox" id="cdjTomoe"> TOMOE</label></div>
+        <div class="row"><label><input type="checkbox" id="mnoOn"> MNO 開機</label> <label><input type="checkbox" id="mnoTomoe"> TOMOE</label></div>
+        <div class="row"><label><input type="checkbox" id="pqrOn"> PQR 開機</label> <label><input type="checkbox" id="pqrTomoe"> TOMOE</label></div>
+        <div class="row"><label><input type="checkbox" id="ghOn"> GH 開機</label> <label><input type="checkbox" id="ghTomoe"> TOMOE</label></div>
+        <div class="row"><label><input type="checkbox" id="abfHelper"> 小幫手</label></div>
+
+        <div><strong>請假</strong></div>
+        <div class="chips" id="leaveChips"></div>
+        <div class="muted">勾選 = 此人本日請假（不會被分配）</div>
+      </div>
+    </div>
+
+    <!-- 結果表 -->
+    <div class="card">
+      <h3>人員分配</h3>
+      <table>
+        <thead><tr><th>工作區域</th><th>人員</th></tr></thead>
+        <tbody id="resultBody"></tbody>
+      </table>
+      <div class="muted" style="margin-top:6px">提示：點名字可直接替換；點 <code>(小幫手)</code> 亦可替換，會同步套用 ABF/CDJ；不合規會顯示「不可」。</div>
+    </div>
   </div>
-</div>
+</section>
 
 <script>
-/* ===== 人員與區域 ===== */
-const PEOPLE=["佳雯","盈儒","忻潔","阿美","美琪","小瑰","靜媚","韶湄","汶倩","麗凰","奕瑄","小雯","惠玲"];
-const AREAS=["ABF","CDJ","MNO","PQR","GH","粗篩","洗球","支援","請假"];
-const LS_KEY="sched_full_rules_v1";
+/* ====== 常量與資料 ====== */
+const LS_KEY = "weekly_full_final_activecard_helperreplace_v1";
+const PEOPLE = ["佳雯","盈儒","忻潔","阿美","美琪","小瑰","靜媚","韶湄","汶倩","麗凰","奕瑄","小雯","惠玲"];
+const EN_AREAS = ["ABF","CDJ","MNO","PQR","GH"];  // 有開機與 TOMOE 選項
+const ALL_AREAS = ["ABF","CDJ","MNO","PQR","GH","粗篩","洗球","支援","請假"];
+const SUMMARY_ORDER = ["ABF","CDJ","MNO","PQR","GH","粗篩","洗球","支援","請假"];
+
+const TOMOE_ALLOWED = new Set(["佳雯","惠玲"]);
+const D3I_ALLOWED   = new Set(["美琪","佳雯","惠玲"]);
 
 /* 限制規則 */
-const CANNOT={
-  "洗球":new Set(["阿美","佳雯","靜媚"]),
-  "粗篩":new Set(["靜媚"])
+const CANNOT = {
+  "洗球": new Set(["阿美","佳雯","靜媚"]),
+  "粗篩": new Set(["靜媚"])
 };
-const ALLOW_ONLY={
-  "美琪":new Set(["ABF","洗球","helper"])
+const ALLOW_ONLY = {
+  "美琪": new Set(["ABF","helper","洗球"]) // helper 供小幫手用
 };
-const TOMOE_ALLOWED=new Set(["佳雯","惠玲"]);
-const D3I_ALLOWED=new Set(["美琪","佳雯","惠玲"]);
 
-/* 工具 */
-function load(){try{return JSON.parse(localStorage.getItem(LS_KEY)||"{}")}catch{return{}}}
-function save(s){localStorage.setItem(LS_KEY,JSON.stringify(s))}
-function fmt(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`}
-function weekRange(anchor){const d=new Date(anchor);const day=(d.getDay()+6)%7;d.setDate(d.getDate()-day);return Array.from({length:7},(_,i)=>{const x=new Date(d);x.setDate(d.getDate()+i);return x;});}
-function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+/* ====== 小工具 ====== */
+function fmt(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+function weekRange(anchor){ const d=new Date(anchor); const day=(d.getDay()+6)%7; d.setDate(d.getDate()-day); return Array.from({length:7},(_,i)=>{const x=new Date(d); x.setDate(d.getDate()+i); return x;}); }
+function load(){ try{return JSON.parse(localStorage.getItem(LS_KEY)||"{}")}catch{return{}} }
+function save(s){ localStorage.setItem(LS_KEY, JSON.stringify(s)); }
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function isHelperTag(s){ return typeof s==="string" && s.endsWith("(小幫手)"); }
+function stripHelper(s){ return isHelperTag(s) ? s.replace("(小幫手)","") : s; }
 
-/* 規則檢查 */
-function canAssign(name,area,tomoe={},d3i={}){
-  if(ALLOW_ONLY[name] && !ALLOW_ONLY[name].has(area)) return false;
-  if(CANNOT[area] && CANNOT[area].has(name)) return false;
-  if(area==="ABF"||area==="CDJ"){
-    if(tomoe[area]){ if(!TOMOE_ALLOWED.has(name)) return false; }
-    if(d3i[area]){ if(!D3I_ALLOWED.has(name)) return false; }
-  }
+/* ====== 狀態與 UI ====== */
+let currentMonday = weekRange(new Date())[0];
+let activeDate = null;
+
+const weekLabel = document.getElementById("weekLabel");
+const grid = document.getElementById("grid");
+const resultBody = document.getElementById("resultBody");
+const panelTitle = document.getElementById("panelTitle");
+const ctrls = document.getElementById("ctrls");
+const leaveChips = document.getElementById("leaveChips");
+
+/* 勾選控制項 DOM */
+const el = {
+  abfOn:document.getElementById("abfOn"), abfTomoe:document.getElementById("abfTomoe"), abfD3i:document.getElementById("abfD3i"),
+  cdjOn:document.getElementById("cdjOn"), cdjTomoe:document.getElementById("cdjTomoe"),
+  mnoOn:document.getElementById("mnoOn"), mnoTomoe:document.getElementById("mnoTomoe"),
+  pqrOn:document.getElementById("pqrOn"), pqrTomoe:document.getElementById("pqrTomoe"),
+  ghOn:document.getElementById("ghOn"),   ghTomoe:document.getElementById("ghTomoe"),
+  abfHelper:document.getElementById("abfHelper")
+};
+
+/* ====== 規則判定 ====== */
+function allowedByTomoeAndD3I(name, area, tomoe, d3i){
+  if (EN_AREAS.includes(area) && tomoe[area]) { if(!TOMOE_ALLOWED.has(name)) return false; }
+  if (area === "ABF" && d3i["ABF"]) { if(!D3I_ALLOWED.has(name)) return false; }
   return true;
 }
-
-/* 畫面 */
-let currentMonday=weekRange(new Date())[0];
-let activeDate=null;
-
-function buildSummary(results,checked){
-  if(!results) return "（尚未排班）";
-  const order=["ABF","CDJ","MNO","PQR","GH","粗篩","洗球","支援","請假"];
-  const rows=order.map(a=>{
-    if(checked && checked[a]===false) return "";
-    const v=results[a]||[];
-    if(!v.length) return "";
-    const val=(a==="洗球" && v.length>4)?`${v.slice(0,4).join("、")} 等 +${v.length-4}`:v.join("、");
-    return `<div><span class="k">${a}</span>：${val}</div>`;
-  }).filter(Boolean);
-  return rows.length?rows.join(""):"（尚未排班）";
+function canAssign(name, area, tomoe, d3i){
+  if (ALLOW_ONLY[name] && !ALLOW_ONLY[name].has(area)) return false;
+  if (CANNOT[area] && CANNOT[area].has(name)) return false;
+  if (!allowedByTomoeAndD3I(name, area, tomoe, d3i)) return false;
+  return true;
+}
+function coreByDate(dateStr){
+  const day = new Date(dateStr).getDate();
+  return (day % 2 === 1) ? "佳雯" : "阿美"; // 奇=佳雯、偶=阿美
 }
 
+/* ====== 週卡片與摘要 ====== */
+function buildSummary(dayData){
+  const res = (dayData && dayData.results) || {};
+  const checked = (dayData && dayData.checked) || {};
+  const rows = SUMMARY_ORDER.map(area=>{
+    if (EN_AREAS.includes(area) && checked && checked[area]===false) return "";
+    const arr = res[area] || [];
+    if (!arr.length) return "";
+    const val = (area==="洗球" && arr.length>4) ? `${arr.slice(0,4).join("、")} 等 +${arr.length-4}` : arr.join("、");
+    return `<div><span class="k">${area}</span>：${val}</div>`;
+  }).filter(Boolean);
+  return rows.length ? rows.join("") : "（尚未排班）";
+}
 function renderWeek(){
-  const days=weekRange(currentMonday);const store=load();
-  document.getElementById("weekLabel").textContent=`${fmt(days[0])}～${fmt(days[6])}`;
-  const grid=document.getElementById("grid");grid.innerHTML="";
+  const days = weekRange(currentMonday);
+  const store = load();
+  weekLabel.textContent = `${fmt(days[0])} ～ ${fmt(days[6])}`;
+  grid.innerHTML = "";
   days.forEach(d=>{
-    const key=fmt(d);
-    const card=document.createElement("div");card.className="day";card.onclick=()=>openDay(key);
-    const data=store[key]||{};
-    const summary=buildSummary(data.results,data.checked);
-    card.innerHTML=`<div class="date">${key}</div><div class="summary">${summary}</div>`;
+    const key = fmt(d);
+    const card = document.createElement("div");
+    card.className = (activeDate && activeDate===key) ? "day active" : "day inactive";
+    card.onclick = ()=> openDay(key);
+    const data = store[key] || {};
+    card.innerHTML = `<div class="date">${key}</div><div class="summary">${buildSummary(data)}</div>`;
     grid.append(card);
   });
 }
-document.getElementById("prevWeek").onclick=()=>{currentMonday.setDate(currentMonday.getDate()-7);renderWeek();};
-document.getElementById("nextWeek").onclick=()=>{currentMonday.setDate(currentMonday.getDate()+7);renderWeek();};
 
-/* 打開日期 */
+/* ====== 開啟某一天（選中才可排班） ====== */
 function openDay(key){
-  activeDate=key;
-  document.getElementById("panelTitle").textContent="設定："+key;
-  const store=load();
-  if(!store[key])store[key]={results:{},checked:{ABF:true,CDJ:true,MNO:true,PQR:true,GH:true}};
-  drawResults(store[key].results,store[key].checked||{});
+  activeDate = key;
+  panelTitle.textContent = `設定：${key}`;
+  ctrls.style.display = ""; // 顯示控制面板
+
+  // 標記選中狀態（顯白）
+  document.querySelectorAll(".day").forEach(el=>{
+    const dateText = el.querySelector(".date")?.textContent;
+    if(dateText === key){ el.classList.remove("inactive"); el.classList.add("active"); }
+    else { el.classList.remove("active"); el.classList.add("inactive"); }
+  });
+
+  const store = load();
+  if (!store[key]) {
+    store[key] = {
+      checked:{ABF:true,CDJ:true,MNO:true,PQR:true,GH:true},
+      tomoe:{}, d3i:{}, abfHelper:false, leave:[], results:{}
+    };
+    save(store);
+  }
+  syncControls();
+  drawResults(store[key].results, store[key].checked);
 }
 
-/* 畫表 */
-function drawResults(results,checked){
-  const tbody=document.getElementById("resultBody");tbody.innerHTML="";
-  AREAS.forEach(a=>{
-    if(checked[a]===false) return;
+/* ====== 同步右側控制項 ====== */
+function syncControls(){
+  const s = load(); const day = s[activeDate] || {};
+  const {checked={}, tomoe={}, d3i={}, abfHelper=false, leave=[]} = day;
+
+  el.abfOn.checked = checked.ABF ?? true;
+  el.cdjOn.checked = checked.CDJ ?? true;
+  el.mnoOn.checked = checked.MNO ?? true;
+  el.pqrOn.checked = checked.PQR ?? true;
+  el.ghOn.checked  = checked.GH  ?? true;
+
+  el.abfTomoe.checked = !!tomoe.ABF; el.abfD3i.checked = !!d3i.ABF;
+  el.cdjTomoe.checked = !!tomoe.CDJ;
+  el.mnoTomoe.checked = !!tomoe.MNO;
+  el.pqrTomoe.checked = !!tomoe.PQR;
+  el.ghTomoe.checked  = !!tomoe.GH;
+
+  el.abfHelper.checked = !!abfHelper;
+
+  // 請假 chips
+  leaveChips.innerHTML="";
+  const set = new Set(leave);
+  PEOPLE.forEach(name=>{
+    const lab=document.createElement("label"); lab.className="chip";
+    const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=set.has(name);
+    cb.onchange=()=>{ if(cb.checked) set.add(name); else set.delete(name); persistDay({leave:[...set]}); };
+    lab.append(cb, document.createTextNode(" "+name));
+    leaveChips.append(lab);
+  });
+
+  // 綁定變更
+  const bindCheck = (elem, path, key, after=()=>{})=>{
+    elem.onchange = ()=>{
+      const st=load(); const d=st[activeDate]||{};
+      d[path]=d[path]||{}; d[path][key]=elem.checked; st[activeDate]=d; save(st);
+      after(d);
+      renderWeek();
+    };
+  };
+  bindCheck(el.abfOn,"checked","ABF");
+  bindCheck(el.cdjOn,"checked","CDJ");
+  bindCheck(el.mnoOn,"checked","MNO");
+  bindCheck(el.pqrOn,"checked","PQR");
+  bindCheck(el.ghOn,"checked","GH");
+
+  bindCheck(el.abfTomoe,"tomoe","ABF");
+  bindCheck(el.cdjTomoe,"tomoe","CDJ");
+  bindCheck(el.mnoTomoe,"tomoe","MNO");
+  bindCheck(el.pqrTomoe,"tomoe","PQR");
+  bindCheck(el.ghTomoe,"tomoe","GH");
+
+  bindCheck(el.abfD3i,"d3i","ABF");
+
+  // 小幫手切換：關閉時移除 ABF/CDJ 的小幫手
+  el.abfHelper.onchange = ()=>{
+    const st=load(); const d=st[activeDate]||{};
+    d.abfHelper = el.abfHelper.checked;
+    if(!d.abfHelper && d.results){
+      ["ABF","CDJ"].forEach(a=>{
+        if(Array.isArray(d.results[a])) d.results[a] = d.results[a].filter(x=>!isHelperTag(x));
+      });
+    }
+    st[activeDate]=d; save(st);
+    drawResults(d.results||{}, d.checked||{});
+    renderWeek();
+  };
+
+  renderWeek();
+}
+
+/* ====== 結果表繪製＋點名字替換（含小幫手） ====== */
+function drawResults(results){
+  resultBody.innerHTML = "";
+  ALL_AREAS.forEach(area=>{
     const tr=document.createElement("tr");
-    const tdA=document.createElement("td");tdA.textContent=a;
+    const tdA=document.createElement("td"); tdA.textContent=area;
     const tdP=document.createElement("td");
-    const arr=results[a]||[];
+    const arr=results[area]||[];
     if(arr.length){
       tdP.className="editable";
       arr.forEach((n,idx)=>{
-        const span=document.createElement("span");
-        span.textContent=n;
-        span.className="name";
-        span.onclick=(e)=>{e.stopPropagation();openPicker(tdP,a,idx,n)};
-        tdP.append(span);
-        if(idx<arr.length-1)tdP.append("、");
+        const span=document.createElement("span"); span.textContent=n; span.className="name";
+        span.onclick=(e)=>{e.stopPropagation(); openPicker(tdP, area, idx, n);};
+        tdP.append(span); if(idx<arr.length-1) tdP.append("、");
       });
     }else tdP.textContent="—";
-    tr.append(tdA,tdP);tbody.append(tr);
+    tr.append(tdA,tdP); resultBody.append(tr);
   });
 }
-
-/* 名單替換 */
-function openPicker(td,area,idx,currentName){
+function openPicker(td, area, idx, currentName){
   closeAnyPicker();
-  const store=load();const day=store[activeDate]||{};
-  const tomoe=day.tomoe||{};const d3i=day.d3i||{};
-  const picker=document.createElement("div");picker.className="picker";
-  PEOPLE.forEach(name=>{
-    const enabled=canAssign(name,area,tomoe,d3i);
-    const row=document.createElement("div");
-    row.className="row"+(enabled?"":" disabled");
-    row.textContent=name+(name===currentName?"（目前）":(enabled?"":"（不可）"));
+  const s=load(); const day=s[activeDate]||{};
+  const {tomoe={}, d3i={}, leave=[], checked={}, abfHelper=false} = day;
+  const leaveSet=new Set(leave);
+
+  const helperMode = (area==="ABF" || area==="CDJ") && isHelperTag(currentName);
+
+  const picker=document.createElement("div"); picker.className="picker";
+  const list=[...PEOPLE];
+  list.forEach(name=>{
+    let enabled;
+    if(helperMode){
+      // 小幫手規則：不可請假；若有人員限制，需允許 helper；不受 TOMOE/D3I 約束
+      enabled = !leaveSet.has(name) && (!ALLOW_ONLY[name] || ALLOW_ONLY[name].has("helper"));
+    }else{
+      enabled = !leaveSet.has(name) && canAssign(name, area, tomoe, d3i);
+    }
+    const row = document.createElement("div"); row.className="row"+(enabled?"":" disabled");
+    const tailNow   = (stripHelper(currentName)===name) ? "（目前）" : "";
+    const tailValid = enabled ? "" : "（不可）";
+    row.textContent = name + (tailNow || tailValid);
+
     if(enabled){
-      row.onclick=()=>{
-        const store=load();const d=store[activeDate]||{results:{}};
-        d.results[area][idx]=name;
-        store[activeDate]=d;save(store);
-        drawResults(d.results,d.checked||{});renderWeek();closeAnyPicker();
+      row.onclick = ()=>{
+        const store=load(); const d=store[activeDate]||{};
+        d.results=d.results||{}; d.results[area]=d.results[area]||[];
+
+        // 先把新人從其他區域移除，避免重複
+        for(const a of ALL_AREAS){
+          if(!Array.isArray(d.results[a])) continue;
+          d.results[a] = d.results[a].filter(x=>stripHelper(x)!==name);
+        }
+
+        if(helperMode){
+          // 同步替換 ABF / CDJ 的小幫手
+          ["ABF","CDJ"].forEach(A=>{
+            if(!Array.isArray(d.results[A])) d.results[A]=[];
+            const i = d.results[A].findIndex(x=>isHelperTag(x));
+            if(i>=0) d.results[A][i] = `${name}(小幫手)`;
+            else if(checked[A]!==false && abfHelper){
+              // 若勾了小幫手但某區沒小幫手字樣，補上
+              d.results[A].push(`${name}(小幫手)`);
+            }
+          });
+        }else{
+          // 一般替換
+          d.results[area][idx] = name;
+        }
+
+        store[activeDate]=d; save(store);
+        drawResults(d.results, d.checked||{}); renderWeek(); closeAnyPicker();
       };
     }
     picker.append(row);
   });
-  td.style.position="relative";td.append(picker);
+  td.style.position="relative"; td.append(picker);
 }
-function closeAnyPicker(){document.querySelectorAll(".picker").forEach(p=>p.remove());}
+function closeAnyPicker(){ document.querySelectorAll(".picker").forEach(p=>p.remove()); }
 
-/* 自動排班邏輯 */
-function coreByDate(dateStr){const day=new Date(dateStr).getDate();return(day%2===1)?"佳雯":"阿美";}
+/* ====== 自動排班：單日與整週 ====== */
 function autoScheduleOne(dateStr){
-  const store=load();const d=store[dateStr]||{results:{},checked:{ABF:true,CDJ:true,MNO:true,PQR:true,GH:true}};
-  const results={};let pool=shuffle([...PEOPLE]);
-  const checked=d.checked||{};
+  const st=load(); const day=st[dateStr]||{checked:{},tomoe:{},d3i:{},abfHelper:false,leave:[],results:{}};
+  const {checked={}, tomoe={}, d3i={}, abfHelper=false} = day;
+  const leaveSet = new Set(day.leave||[]);
+  let pool = shuffle(PEOPLE.filter(n=>!leaveSet.has(n)));
 
-  // 請假剔除
-  const leave=new Set(d.leave||[]);
-  pool=pool.filter(x=>!leave.has(x));
+  const results = {};
+  const takeOne = (area)=>{
+    for(let i=0;i<pool.length;i++){
+      const name=pool[i];
+      if(canAssign(name, area, tomoe, d3i)){ pool.splice(i,1); return name; }
+    }
+    return null;
+  };
 
-  // 粗篩
-  const core=coreByDate(dateStr);
-  const rough=[];
-  if(!leave.has(core)&&canAssign(core,"粗篩")){pool=pool.filter(x=>x!==core);rough.push(core);}
-  const partner=pool.find(n=>canAssign(n,"粗篩")&&n!=="佳雯"&&n!=="阿美");
-  if(partner){pool=pool.filter(x=>x!==partner);rough.push(partner);}
-  results["粗篩"]=rough;
+  // 1) 粗篩（優先）
+  const group=[];
+  let core = (new Date(dateStr).getDate()%2===1) ? "佳雯" : "阿美";
+  if(leaveSet.has(core)) core = (core==="佳雯") ? "阿美" : "佳雯";
+  if(!leaveSet.has(core) && canAssign(core,"粗篩",tomoe,d3i)){
+    const i=pool.indexOf(core); if(i>=0){ pool.splice(i,1); group.push(core); }
+  }
+  const partnerIdx = pool.findIndex(n=> n!=="佳雯" && n!=="阿美" && canAssign(n,"粗篩",tomoe,d3i));
+  if(partnerIdx>=0){ group.push(pool.splice(partnerIdx,1)[0]); }
+  if(group.length<2){
+    while(group.length<2 && pool.length){
+      const pIdx = pool.findIndex(n=>canAssign(n,"粗篩",tomoe,d3i));
+      if(pIdx<0) break;
+      group.push(pool.splice(pIdx,1)[0]);
+    }
+  }
+  results["粗篩"] = group;
 
-  // ABF/CDJ
-  if(checked.ABF){const who=pool.find(n=>canAssign(n,"ABF",d.tomoe,d.d3i));if(who){pool=pool.filter(x=>x!==who);results["ABF"]=[who];}}
-  if(checked.CDJ){const who=pool.find(n=>canAssign(n,"CDJ",d.tomoe,d.d3i));if(who){pool=pool.filter(x=>x!==who);results["CDJ"]=[who];}}
+  // 2) ABF / CDJ（含小幫手、TOMOE、D3I）
+  if(checked.ABF!==false){
+    const abfMain = takeOne("ABF"); if(abfMain) results["ABF"]=[abfMain];
+  }else{ results["ABF"]=[]; }
+  if(checked.CDJ!==false){
+    const cdjMain = takeOne("CDJ"); if(cdjMain) results["CDJ"]=[cdjMain];
+  }else{ results["CDJ"]=[]; }
 
-  // MNO/PQR/GH
+  if(checked.ABF!==false && checked.CDJ!==false && abfHelper){
+    const helperIdx = pool.findIndex(n => (!ALLOW_ONLY[n] || ALLOW_ONLY[n].has("helper")));
+    if(helperIdx>=0){
+      const helper = pool.splice(helperIdx,1)[0];
+      results["ABF"] = [...(results["ABF"]||[]), `${helper}(小幫手)`];
+      results["CDJ"] = [...(results["CDJ"]||[]), `${helper}(小幫手)`];
+    }
+  }
+
+  // 3) MNO / PQR / GH（各 1）
   ["MNO","PQR","GH"].forEach(a=>{
-    if(checked[a]){const who=pool.find(n=>canAssign(n,a));if(who){pool=pool.filter(x=>x!==who);results[a]=[who];}}
+    if(checked[a]===false){ results[a]=[]; return; }
+    const who = takeOne(a); results[a] = who? [who] : [];
   });
 
-  // 洗球
-  results["洗球"]=pool.filter(n=>canAssign(n,"洗球"));
-  results["支援"]=results["支援"]||[];
-  results["請假"]=[...leave];
+  // 4) 洗球：剩餘且允許
+  results["洗球"] = pool.filter(n=>canAssign(n,"洗球",tomoe,d3i));
+  // 5) 支援、請假
+  results["支援"] = results["支援"] || [];
+  results["請假"] = [...leaveSet];
 
-  d.results=results;store[dateStr]=d;save(store);
-  if(activeDate===dateStr){drawResults(results,d.checked);}
+  day.results = results;
+  st[dateStr] = day; save(st);
+  if(activeDate===dateStr) drawResults(results, day.checked||{});
+}
+function autoScheduleWeek(){
+  weekRange(currentMonday).forEach(d=> autoScheduleOne(fmt(d)));
+  renderWeek();
+  if(!activeDate){ openDay(fmt(weekRange(currentMonday)[0])); }
 }
 
-function autoScheduleWeek(){weekRange(currentMonday).forEach(d=>autoScheduleOne(fmt(d)));renderWeek();}
-document.getElementById("autoWeek").onclick=autoScheduleWeek;
-document.getElementById("autoToday").onclick=()=>{
-  if(!activeDate){alert("請先選一天");return;}
-  autoScheduleOne(activeDate);renderWeek();
+/* ====== 事件綁定 ====== */
+document.getElementById("prevWeek").onclick=()=>{ currentMonday.setDate(currentMonday.getDate()-7); renderWeek(); };
+document.getElementById("nextWeek").onclick=()=>{ currentMonday.setDate(currentMonday.getDate()+7); renderWeek(); };
+document.getElementById("autoWeek").onclick = autoScheduleWeek;
+document.getElementById("autoToday").onclick = ()=>{
+  if(!activeDate){ alert("請先點上方某一天卡片（變白後），再按『自動排當天』"); return; }
+  autoScheduleOne(activeDate); renderWeek();
 };
 
-/* 初始化 */
+/* ====== 儲存 patch ====== */
+function persistDay(patch){
+  if(!activeDate) return;
+  const st=load(); const day=st[activeDate] || {};
+  st[activeDate] = {...day, ...patch};
+  save(st);
+  syncControls(); renderWeek();
+}
+
+/* ====== 初始化 ====== */
 renderWeek();
 </script>
 </body>
