@@ -2,861 +2,228 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>自動排班表</title>
 <style>
-  :root{
-    --bg:#f3f4f6; --card:#fff; --text:#111827; --muted:#6b7280; --border:#e5e7eb;
-    --accent:#2563eb; --accent-2:#1d4ed8; --shadow:0 1px 4px rgba(0,0,0,.06);
-    --scrim: rgba(0,0,0,.4);
-  }
-  @media (prefers-color-scheme: dark){
-    :root{
-      --bg:#0b0f14; --card:#121721; --text:#e5e7eb; --muted:#9aa4b2; --border:#1f2733;
-      --accent:#3b82f6; --accent-2:#2563eb; --shadow:0 1px 4px rgba(0,0,0,.35);
-      --scrim: rgba(0,0,0,.6);
-    }
-  }
-
-  *{box-sizing:border-box}
-  html,body{height:100%}
-  body{font-family:"Microsoft JhengHei","Noto Sans TC",system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:var(--bg);color:var(--text)}
-
-  /* 置頂工具列（sticky） */
-  header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#1f2937;color:#fff}
-  header h1{font-size:18px;margin:0}
-  .weekbar{display:flex;gap:8px;align-items:center}
-  .weekbar button{padding:8px 12px;font-size:14px;border:none;border-radius:8px;background:#374151;color:#fff;cursor:pointer;touch-action:manipulation}
-  .weekbar button:active{transform:translateY(1px)}
-  .weekbar button:hover{background:#4b5563}
-  #weekLabel{font-size:14px;opacity:.9}
-
-  /* 版面 */
-  .container{display:grid;grid-template-columns:1fr;grid-template-rows:auto auto;grid-template-areas:"cal" "panel"}
-  .grid{grid-area:cal;display:grid;gap:12px;padding:12px 14px}
-
-  /* 日期卡片 */
-  .day{
-    background:var(--card);border-radius:12px;border:1px solid var(--border);
-    box-shadow:var(--shadow);padding:8px;min-height:72px;display:flex;flex-direction:column;cursor:pointer;
-    transition:background .15s ease,border-color .15s ease;
-  }
-  .day:hover{background:rgba(148,163,184,.12)}
-  .day .date{
-    font-size:13px;font-weight:700;color:var(--text);
-    background:rgba(148,163,184,.18);border:1px solid var(--border);
-    border-radius:8px;padding:4px 8px;margin-bottom:6px;display:inline-block;
-  }
-
-  /* 卡片摘要 */
-  .day .summary{white-space:normal;overflow:visible;text-overflow:initial;font-size:12px;color:#374151}
-  @media (prefers-color-scheme: dark){ .day .summary{color:#cbd5e1} }
-  .sumgrid{display:flex;flex-direction:column;gap:4px}
-  .srow{display:grid;grid-template-columns:54px 1fr;align-items:start;column-gap:6px;line-height:1.35}
-  .srow .k{color:var(--muted);font-weight:700}
-  .srow .v{color:var(--text)}
-
-  /* 桌機面板（小螢幕隱藏） */
-  .side{grid-area:panel;border-left:none;border-top:1px solid var(--border);background:var(--card);padding:14px 14px 18px;box-shadow:0 -4px 16px rgba(0,0,0,.06)}
-  .side h2{margin:0 0 12px;font-size:17px}
-  .areas{display:flex;flex-wrap:wrap;gap:10px}
-  .areas label{display:flex;gap:8px;align-items:center;padding:8px 12px;border:1px solid var(--border);border-radius:10px;background:rgba(148,163,184,.12);font-size:14px;cursor:pointer}
-  .areas input[type="checkbox"]{width:18px;height:18px}
-  .chips{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
-  .chip{border:1px solid var(--border);border-radius:20px;padding:6px 12px;background:rgba(148,163,184,.12);font-size:14px;display:inline-flex;gap:8px;align-items:center}
-  .chip input{width:18px;height:18px}
-  .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
-  .btns button{padding:10px 14px;border:none;border-radius:10px;background:var(--accent);color:#fff;font-size:14px;cursor:pointer;touch-action:manipulation}
-  .btns button:hover{background:var(--accent-2)}
-  table{width:100%;border-collapse:collapse;margin-top:12px}
-  th,td{border:1px solid var(--border);padding:10px;text-align:center;font-size:15px}
-  th{background:rgba(148,163,184,.18);font-weight:700}
-
-  /* 彈出名單（點名字即換人） */
-  td.editable{cursor:pointer}
-  td.editable:hover{background:rgba(148,163,184,.12)}
-  .dropdown{position:relative}
-  .picker{
-    position:absolute;z-index:1000;background:var(--card);border:1px solid var(--border);
-    border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.2);padding:10px;min-width:240px;max-height:55vh;overflow:auto;right:0;
-  }
-  .picker .row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px}
-  .picker .row:hover{background:rgba(148,163,184,.16)}
-  .picker .row.disabled{opacity:.45;pointer-events:none}
-  .picker .hint{font-size:12px;color:var(--muted);margin:0 2px 8px}
-  .picker .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
-  .picker .actions button{padding:8px 10px;border:none;border-radius:8px;cursor:pointer;background:rgba(148,163,184,.18);color:var(--text)}
-
-  /* RWD 欄數 */
-  @media (min-width:360px){ .grid{grid-template-columns:repeat(1,1fr)} }
-  @media (min-width:600px){ .grid{grid-template-columns:repeat(2,1fr)} .day{min-height:80px} }
-  @media (min-width:900px){ .grid{grid-template-columns:repeat(4,1fr)} }
-  @media (min-width:1280px){ .grid{grid-template-columns:repeat(7,1fr)} }
-
-  /* 小螢幕：桌機面板隱藏，改用抽屜 */
-  @media (max-width:899px){
-    .side{display:none}
-  }
-
-  /* FAB */
-  .fab{
-    position:fixed;right:16px;bottom:16px;z-index:80;border:none;border-radius:999px;
-    padding:12px 16px;background:var(--accent);color:#fff;font-size:14px;box-shadow:0 8px 20px rgba(0,0,0,.25);display:none;
-  }
-  @media (max-width:899px){ .fab{display:block} }
-
-  /* 抽屜（手勢） */
-  .scrim{
-    position:fixed;inset:0;background:var(--scrim);opacity:0;pointer-events:none;transition:opacity .2s ease;z-index:70;
-  }
-  .scrim.show{opacity:1;pointer-events:auto}
-  .drawer{
-    position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--border);
-    box-shadow:0 -16px 30px rgba(0,0,0,.3);padding:8px 14px 24px;z-index:75;
-    transform:translateY(100%);transition:transform .25s ease;
-    touch-action:none;
-  }
-  .drawer.open{ transform:translateY(0) }
-  .drawer .handleWrap{display:flex;justify-content:center;align-items:center;padding:6px 0 8px;cursor:grab}
-  .drawer .handle{width:44px;height:5px;background:rgba(148,163,184,.5);border-radius:999px}
-  .drawer h2{margin:0 0 10px;font-size:16px}
+body{font-family:"Microsoft JhengHei",sans-serif;margin:0;background:#f3f4f6;color:#111}
+header{position:sticky;top:0;background:#1f2937;color:#fff;padding:8px;z-index:50;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+header button{border:none;background:#3b82f6;color:#fff;padding:6px 10px;border-radius:8px;cursor:pointer}
+header button:hover{background:#2563eb}
+.weekbar{display:flex;gap:8px;align-items:center}
+.grid{display:grid;gap:8px;padding:8px}
+@media(min-width:600px){.grid{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:900px){.grid{grid-template-columns:repeat(4,1fr)}}
+@media(min-width:1280px){.grid{grid-template-columns:repeat(7,1fr)}}
+.day{background:#fff;border:1px solid #ddd;border-radius:8px;padding:8px;cursor:pointer}
+.date{font-weight:bold;margin-bottom:4px}
+.summary{font-size:12px;color:#444}
+.side{padding:12px;background:#fff;border-top:1px solid #ddd}
+table{width:100%;border-collapse:collapse;margin-top:8px;background:#fff}
+th,td{border:1px solid #ddd;padding:6px;text-align:center}
+td.editable span.name{cursor:pointer;padding:2px 4px;border-radius:4px;display:inline-block}
+td.editable span.name:hover{background:#eee}
+.picker{position:absolute;z-index:100;background:#fff;border:1px solid #ccc;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.2);padding:8px;max-height:50vh;overflow:auto}
+.picker .row{padding:4px 8px;cursor:pointer;border-radius:6px}
+.picker .row:hover{background:#eee}
+.picker .row.disabled{color:#999;cursor:not-allowed}
+.k{color:#6b7280;font-weight:bold}
 </style>
 </head>
 <body>
 <header>
-  <h1>一週班表</h1>
   <div class="weekbar">
     <button id="prevWeek">← 上一週</button>
     <div id="weekLabel"></div>
     <button id="nextWeek">下一週 →</button>
   </div>
+  <button id="autoWeek">⚡ 一鍵自動排整週</button>
+  <button id="autoToday">⚡ 自動排當天</button>
 </header>
 
-<div class="container">
-  <div class="grid" id="grid"></div>
+<div class="grid" id="grid"></div>
 
-  <!-- 桌機版面板 -->
-  <aside class="side" id="side">
-    <h2 id="panelTitle">請從上方選日期</h2>
-    <div id="panel" style="display:none">
-      <div class="areas" id="areaControls"></div>
-      <div style="margin:10px 0">
-        <label style="display:inline-flex;gap:8px;align-items:center">
-          <input type="checkbox" id="abfHelper"> 小幫手
-        </label>
-      </div>
-      <div class="chips" id="peopleChips"></div>
-      <div style="color:var(--muted);font-size:12px;margin-top:6px">勾選 = 請假</div>
-      <div class="btns">
-        <button id="run">⚡ 自動排班（此日）</button>
-        <button id="clearResults">清空結果</button>
-        <button id="saveOnly">只存請假/開機</button>
-      </div>
-      <table>
-        <thead><tr><th>工作區域</th><th>人員</th></tr></thead>
-        <tbody id="resultBody"></tbody>
-      </table>
-    </div>
-  </aside>
-</div>
-
-<!-- 手機：手勢抽屜 -->
-<button class="fab" id="fab">設定 / 排班</button>
-<div class="scrim" id="scrim"></div>
-<div class="drawer" id="drawer" aria-modal="true" role="dialog">
-  <div class="handleWrap" id="dragHandle"><div class="handle"></div></div>
-  <h2 id="mPanelTitle" style="margin:0 0 10px;font-size:16px">設定</h2>
-  <div id="mPanel">
-    <div class="areas" id="mAreaControls"></div>
-    <div style="margin:10px 0">
-      <label style="display:inline-flex;gap:8px;align-items:center">
-        <input type="checkbox" id="mAbfHelper"> ABF 小幫手
-      </label>
-    </div>
-    <div class="chips" id="mPeopleChips"></div>
-    <div style="color:var(--muted);font-size:12px;margin-top:6px">勾選 = 請假</div>
-    <div class="btns">
-      <button id="mRun">⚡ 自動排班（此日）</button>
-      <button id="mClearResults">清空結果</button>
-      <button id="mSaveOnly">只存請假/開機</button>
-    </div>
-    <table>
-      <thead><tr><th>工作區域</th><th>人員</th></tr></thead>
-      <tbody id="mResultBody"></tbody>
-    </table>
+<div class="side">
+  <h2 id="panelTitle">請選日期</h2>
+  <table>
+    <thead><tr><th>工作區域</th><th>人員</th></tr></thead>
+    <tbody id="resultBody"></tbody>
+  </table>
+  <div style="font-size:12px;color:#6b7280;margin-top:6px">
+    小技巧：點某個名字可直接替換他；不合規的選項會顯示「不可」且無法選取。
   </div>
 </div>
 
 <script>
-/* ========= 常數與資料 ========= */
-const LS_KEY = "weekly_scheduler_rwd_handfix_v1";
-const PEOPLE = ["佳雯","盈儒","忻潔","阿美","美琪","小瑰","靜媚","韶湄","汶倩","麗凰","奕瑄","小雯","惠玲"];
-const AREAS_WITH_CHECK = ["ABF","CDJ","MNO","PQR","GH"];
-const AREAS_FIXED = ["粗篩","洗球","支援","請假"];
-const ALL_AREAS = [...AREAS_WITH_CHECK, ...AREAS_FIXED, "未分派"];
-const SINGLE_SLOT = new Set(["ABF","CDJ","MNO","PQR","GH"]);
-const MULTI_SLOT  = new Set(["粗篩","洗球","支援"]);
+/* ===== 人員與區域 ===== */
+const PEOPLE=["佳雯","盈儒","忻潔","阿美","美琪","小瑰","靜媚","韶湄","汶倩","麗凰","奕瑄","小雯","惠玲"];
+const AREAS=["ABF","CDJ","MNO","PQR","GH","粗篩","洗球","支援","請假"];
+const LS_KEY="sched_full_rules_v1";
 
 /* 限制規則 */
-const CANNOT = { "洗球": new Set(["阿美","佳雯","靜媚"]), "粗篩": new Set(["靜媚"]) };
-const ALLOW_ONLY = { "美琪": new Set(["ABF","helper","洗球"]) };
+const CANNOT={
+  "洗球":new Set(["阿美","佳雯","靜媚"]),
+  "粗篩":new Set(["靜媚"])
+};
+const ALLOW_ONLY={
+  "美琪":new Set(["ABF","洗球","helper"])
+};
+const TOMOE_ALLOWED=new Set(["佳雯","惠玲"]);
+const D3I_ALLOWED=new Set(["美琪","佳雯","惠玲"]);
 
-/* TOMOE / D3I 限制 */
-const TOMOE_ALLOWED = new Set(["佳雯","惠玲"]);
-const D3I_ALLOWED   = new Set(["美琪","佳雯","惠玲"]);
+/* 工具 */
+function load(){try{return JSON.parse(localStorage.getItem(LS_KEY)||"{}")}catch{return{}}}
+function save(s){localStorage.setItem(LS_KEY,JSON.stringify(s))}
+function fmt(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`}
+function weekRange(anchor){const d=new Date(anchor);const day=(d.getDay()+6)%7;d.setDate(d.getDate()-day);return Array.from({length:7},(_,i)=>{const x=new Date(d);x.setDate(d.getDate()+i);return x;});}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 
-/* ========= 小工具 ========= */
-const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-function weekRange(anchor){ const d=new Date(anchor); const day=(d.getDay()+6)%7; d.setDate(d.getDate()-day); return Array.from({length:7},(_,i)=>{const x=new Date(d); x.setDate(d.getDate()+i); return x;}); }
-function load(){ try{return JSON.parse(localStorage.getItem(LS_KEY)||"{}")}catch{return{}} }
-function save(s){ localStorage.setItem(LS_KEY, JSON.stringify(s)); }
-function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
-function intersectSets(a,b){ const out=new Set(); for(const v of a){ if(b.has(v)) out.add(v); } return out; }
-const orderForSummary = ["ABF","CDJ","MNO","PQR","GH","粗篩","洗球","支援","請假"];
-
-/* ========= 摘要（固定順序＋未開機不顯示） ========= */
-function buildSummary(dayData){
-  const res = (dayData && dayData.results) || {};
-  const checked = (dayData && dayData.checked) || {};
-  const rows = orderForSummary.map(area=>{
-    const arr = res[area] || [];
-    if (AREAS_WITH_CHECK.includes(area) && !(checked||{})[area]) return "";
-    if (!arr.length) return "";
-    const val = (area === "洗球")
-      ? (arr.length>4 ? `${arr.slice(0,4).join("、")} 等 +${arr.length-4}` : arr.join("、"))
-      : arr.join("、");
-    return `<div class="srow"><div class="k">${area}</div><div class="v">${val}</div></div>`;
-  }).filter(Boolean);
-  return rows.length ? `<div class="sumgrid">${rows.join("")}</div>` : "（尚未排班）";
+/* 規則檢查 */
+function canAssign(name,area,tomoe={},d3i={}){
+  if(ALLOW_ONLY[name] && !ALLOW_ONLY[name].has(area)) return false;
+  if(CANNOT[area] && CANNOT[area].has(name)) return false;
+  if(area==="ABF"||area==="CDJ"){
+    if(tomoe[area]){ if(!TOMOE_ALLOWED.has(name)) return false; }
+    if(d3i[area]){ if(!D3I_ALLOWED.has(name)) return false; }
+  }
+  return true;
 }
 
-/* ========= 週格 ========= */
-let currentMonday = weekRange(new Date())[0];
-const grid = document.getElementById("grid");
-const weekLabel = document.getElementById("weekLabel");
-document.getElementById("prevWeek").onclick = ()=>{ currentMonday.setDate(currentMonday.getDate()-7); renderWeek(); };
-document.getElementById("nextWeek").onclick = ()=>{ currentMonday.setDate(currentMonday.getDate()+7); renderWeek(); };
+/* 畫面 */
+let currentMonday=weekRange(new Date())[0];
+let activeDate=null;
+
+function buildSummary(results,checked){
+  if(!results) return "（尚未排班）";
+  const order=["ABF","CDJ","MNO","PQR","GH","粗篩","洗球","支援","請假"];
+  const rows=order.map(a=>{
+    if(checked && checked[a]===false) return "";
+    const v=results[a]||[];
+    if(!v.length) return "";
+    const val=(a==="洗球" && v.length>4)?`${v.slice(0,4).join("、")} 等 +${v.length-4}`:v.join("、");
+    return `<div><span class="k">${a}</span>：${val}</div>`;
+  }).filter(Boolean);
+  return rows.length?rows.join(""):"（尚未排班）";
+}
 
 function renderWeek(){
-  const days = weekRange(currentMonday);
-  weekLabel.textContent = `${fmt(days[0])} ～ ${fmt(days[6])}`;
-  grid.innerHTML="";
-  const store = load();
-
+  const days=weekRange(currentMonday);const store=load();
+  document.getElementById("weekLabel").textContent=`${fmt(days[0])}～${fmt(days[6])}`;
+  const grid=document.getElementById("grid");grid.innerHTML="";
   days.forEach(d=>{
-    const key = fmt(d);
-    const card = document.createElement("div");
-    card.className="day";
-    card.onclick = ()=> openDay(key);
-    const title = document.createElement("div");
-    title.className="date";
-    title.textContent = key;
-    const sum = document.createElement("div");
-    sum.className="summary";
-    const dayData = store[key]||{};
-    const hasAny = dayData.results && Object.values(dayData.results).some(v => Array.isArray(v) && v.length);
-    sum.innerHTML = hasAny ? buildSummary(dayData) : "（尚未排班）";
-    card.append(title,sum);
+    const key=fmt(d);
+    const card=document.createElement("div");card.className="day";card.onclick=()=>openDay(key);
+    const data=store[key]||{};
+    const summary=buildSummary(data.results,data.checked);
+    card.innerHTML=`<div class="date">${key}</div><div class="summary">${summary}</div>`;
     grid.append(card);
   });
 }
+document.getElementById("prevWeek").onclick=()=>{currentMonday.setDate(currentMonday.getDate()-7);renderWeek();};
+document.getElementById("nextWeek").onclick=()=>{currentMonday.setDate(currentMonday.getDate()+7);renderWeek();};
 
-/* ========= 面板（桌機 + 手機抽屜共用） ========= */
-const panel = document.getElementById("panel");
-const panelTitle = document.getElementById("panelTitle");
-const peopleChips = document.getElementById("peopleChips");
-const resultBody = document.getElementById("resultBody");
-const areaControls = document.getElementById("areaControls");
-
-const mPanelTitle = document.getElementById("mPanelTitle");
-const mPeopleChips = document.getElementById("mPeopleChips");
-const mResultBody = document.getElementById("mResultBody");
-const mAreaControls = document.getElementById("mAreaControls");
-
-let activeDate = null;
-
-/* ====== 條件判斷 ====== */
-function canAssignBase(name, area){
-  if (ALLOW_ONLY[name]) return ALLOW_ONLY[name].has(area);
-  if (CANNOT[area] && CANNOT[area].has(name)) return false;
-  return true;
-}
-function allowedSetFor(area, tomoe, d3i){
-  if(area === "ABF"){
-    const tOn = !!tomoe["ABF"];
-    const dOn = !!d3i["ABF"];
-    if(tOn && dOn) return intersectSets(TOMOE_ALLOWED, D3I_ALLOWED);
-    if(tOn) return TOMOE_ALLOWED;
-    if(dOn) return D3I_ALLOWED;
-    return null;
-  }else{
-    if(!!tomoe[area]) return TOMOE_ALLOWED;
-    return null;
-  }
-}
-function canAssignToArea(name, area, tomoe, d3i){
-  if(!canAssignBase(name, area)) return false;
-  const allow = allowedSetFor(area, tomoe, d3i);
-  return allow ? allow.has(name) : true;
-}
-
-/* ====== 控制面板 UI ====== */
-function bindSharedControls(rootIdPrefix){
-  const areaRoot = rootIdPrefix === "m" ? mAreaControls : areaControls;
-  areaRoot.innerHTML = "";
-  AREAS_WITH_CHECK.forEach(area=>{
-    const wrap = document.createElement("label");
-    Object.assign(wrap.style,{display:"flex",alignItems:"center",gap:"8px",padding:"8px 12px"});
-    const cb = document.createElement("input"); cb.type="checkbox"; cb.dataset.area=area;
-    const nameNode = document.createTextNode(area);
-
-    const tomoeBox = document.createElement("span"); tomoeBox.className="optBox";
-    const tomoeCb = document.createElement("input"); tomoeCb.type="checkbox"; tomoeCb.dataset.tomoe=area;
-    tomoeBox.append(tomoeCb, document.createTextNode("TOMOE"));
-
-    const d3iBox = document.createElement("span"); d3iBox.className="optBox";
-    const d3iCb = document.createElement("input"); d3iCb.type="checkbox"; d3iCb.dataset.d3i=area;
-    d3iBox.append(d3iCb, document.createTextNode("D3I"));
-    if(area!=="ABF") d3iBox.style.display="none";
-
-    cb.addEventListener("change", ()=>{
-      if(!activeDate) return;
-      const store=load(); const day=store[activeDate]||{};
-      day.checked=day.checked||{}; day.checked[area]=cb.checked;
-      if(!cb.checked){
-        tomoeCb.checked=false; d3iCb.checked=false;
-        day.tomoe = day.tomoe || {}; day.tomoe[area]=false;
-        day.d3i   = day.d3i   || {}; day.d3i[area]=false;
-      }
-      store[activeDate]=day; save(store);
-      syncControls(); renderWeek();
-    });
-    tomoeCb.addEventListener("change", ()=>{ if(!activeDate) return; const s=load(); const d=s[activeDate]||{}; d.tomoe=d.tomoe||{}; d.tomoe[area]=tomoeCb.checked; s[activeDate]=d; save(s); });
-    d3iCb.addEventListener("change", ()=>{ if(!activeDate) return; const s=load(); const d=s[activeDate]||{}; d.d3i=d.d3i||{}; d.d3i[area]=d3iCb.checked; s[activeDate]=d; save(s); });
-
-    wrap.append(cb, nameNode, tomoeBox, d3iBox);
-    areaRoot.append(wrap);
-  });
-}
-function syncControls(){
-  const store = load(); const day = store[activeDate]||{};
-  const leave = new Set(day.leave||[]);
-  const checked = day.checked||{}; const tomoe=day.tomoe||{}; const d3i=day.d3i||{};
-  const abfHelper = !!day.abfHelper;
-
-  document.querySelectorAll('[data-area]').forEach(el=>{
-    const area = el.dataset.area; el.checked = !!checked[area];
-    const t = el.parentElement.querySelector('[data-tomoe]'); if(t){ t.checked = !!tomoe[area]; t.parentElement.style.display = el.checked ? "inline-flex":"none"; }
-    const d3 = el.parentElement.querySelector('[data-d3i]'); if(d3){ d3.checked = !!d3i[area]; d3.parentElement.style.display = (el.checked && area==="ABF") ? "inline-flex":"none"; }
-  });
-  const abfId = document.getElementById("abfHelper"); if(abfId) abfId.checked = abfHelper;
-  const mabfId = document.getElementById("mAbfHelper"); if(mabfId) mabfId.checked = abfHelper;
-
-  peopleChips.innerHTML=""; mPeopleChips.innerHTML="";
-  const addChip = (root, name)=>{
-    const label = document.createElement("label"); label.className="chip";
-    const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=leave.has(name);
-    cb.onchange = ()=>{ if(cb.checked) leave.add(name); else leave.delete(name); persistDay({leave:[...leave]}); };
-    label.append(cb, document.createTextNode(" "+name)); root.append(label);
-  };
-  PEOPLE.forEach(n=>{ addChip(peopleChips,n); addChip(mPeopleChips,n); });
-
-  drawResults(day.results||{}, day.manualLocks||{}, resultBody);
-  drawResults(day.results||{}, day.manualLocks||{}, mResultBody);
-}
-
+/* 打開日期 */
 function openDay(key){
-  activeDate = key;
-  panelTitle.textContent = `設定：${key}`;
-  mPanelTitle.textContent = `設定：${key}`;
-  document.getElementById("panel").style.display = "";
-  const store = load(); if(!store[key]){ store[key]={}; save(store); }
-  syncControls();
+  activeDate=key;
+  document.getElementById("panelTitle").textContent="設定："+key;
+  const store=load();
+  if(!store[key])store[key]={results:{},checked:{ABF:true,CDJ:true,MNO:true,PQR:true,GH:true}};
+  drawResults(store[key].results,store[key].checked||{});
 }
 
-/* ========= 核心：排班規則 ========= */
-function pickOne(pool, area, allowSet=null){
-  let cands = pool.map((n,i)=>({n,i})).filter(x => canAssignBase(x.n, area));
-  if (allowSet) cands = cands.filter(x => allowSet.has(x.n));
-  if (!cands.length) return null;
-  const idx = Math.floor(Math.random() * cands.length);
-  const pick = cands[idx];
-  pool.splice(pick.i, 1);
-  return pick.n;
-}
-function coreForDate(dateStr){
-  const d = new Date(dateStr);
-  return (d.getDate() % 2 === 1) ? "佳雯" : "阿美";
-}
-
-/* ====== 手動鎖定：工具 ====== */
-function findLockedAreaOf(name, manualLocks){
-  for(const area of Object.keys(manualLocks||{})){
-    const arr = manualLocks[area]||[];
-    if(arr.includes(name)) return area;
-  }
-  return null;
-}
-function removeFromAllAreas(manualLocks, name){
-  for(const a of Object.keys(manualLocks)){
-    manualLocks[a] = (manualLocks[a]||[]).filter(x=>x!==name);
-  }
-}
-function normalizeLocks(day){
-  // 規則：同一人最多出現在一個區；優先順序：
-  const priority = ["粗篩","ABF","CDJ","MNO","PQR","GH","洗球","支援"];
-  const leaveSet = new Set(day.leave||[]);
-  const tomoe = day.tomoe||{}; const d3i = day.d3i||{};
-  const src = day.manualLocks || {};
-  const dst = {};
-  priority.forEach(a => { dst[a]=[]; });
-  const used = new Set();
-
-  for(const a of priority){
-    const arr = (src[a]||[]).slice();
-    for(const name of arr){
-      if(used.has(name)) continue;
-      if(leaveSet.has(name)) continue;
-      if(!canAssignToArea(name, a, tomoe, d3i)) continue;
-      if(SINGLE_SLOT.has(a)){
-        dst[a] = [name];
-        used.add(name);
-      }else{
-        // 多槽可多位，但人不可重複
-        dst[a].push(name);
-        used.add(name);
-      }
-    }
-  }
-  day.manualLocks = dst;
-}
-
-/* —— 依「鎖定名單」重新排 —— */
-function recomputeWithLocks(key){
-  const store = load();
-  const day = store[key] || {};
-  const checked = day.checked || {};
-  const tomoe = day.tomoe || {};
-  const d3i   = day.d3i   || {};
-  const abfHelperOn = !!day.abfHelper;
-  const leaveSet = new Set(day.leave || []);
-  day.manualLocks = day.manualLocks || {};
-
-  // 先正規化手動鎖定，移除衝突、違規與請假
-  normalizeLocks(day);
-
-  // 建 pool（先排除手動鎖定與請假）
-  let lockedNames = [];
-  Object.values(day.manualLocks).forEach(arr=>{ if(Array.isArray(arr)) lockedNames.push(...arr); });
-  const lockedSet = new Set(lockedNames);
-  let pool = shuffle(PEOPLE.filter(n=>!leaveSet.has(n) && !lockedSet.has(n)));
-
-  const results = {};
-  const set = (area, arr)=>{ results[area] = (arr && arr.length)? arr.slice():[]; };
-
-  set("支援", []);
-  set("請假", [...leaveSet]);
-
-  // 先放入鎖定（直接生效）
-  for (const area of Object.keys(day.manualLocks)){
-    const arr = (day.manualLocks[area]||[]).filter(n => !leaveSet.has(n) && canAssignToArea(n, area, tomoe, d3i));
-    if(arr.length){
-      set(area, arr);
-    }
-  }
-
-  // 1) 粗篩（若未鎖定）
-  if(!(results["粗篩"] && results["粗篩"].length)){
-    const bothOnLeave = leaveSet.has("佳雯") && leaveSet.has("阿美");
-    if (bothOnLeave) {
-      let partners = pool.map((n,i)=>({n,i})).filter(x=>canAssignBase(x.n,"粗篩"));
-      const group = [];
-      for (let k=0;k<2 && partners.length;k++){
-        const pickIdx = Math.floor(Math.random()*partners.length);
-        const pick = partners.splice(pickIdx,1)[0];
-        group.push(pick.n);
-        const rm = pool.indexOf(pick.n);
-        if (rm >= 0) pool.splice(rm,1);
-      }
-      set("粗篩", group.length ? group : ["缺人"]);
-    } else {
-      let core = coreForDate(key);
-      if (leaveSet.has(core)) core = (core==="佳雯") ? "阿美" : "佳雯";
-      const group = [];
-      const idx = pool.indexOf(core);
-      if(idx>=0){ group.push(pool[idx]); pool.splice(idx,1); }
-      let partners = pool.map((n,i)=>({n,i}))
-        .filter(x=> x.n!=="佳雯" && x.n!=="阿美" && canAssignBase(x.n,"粗篩"));
-      if(partners.length){
-        const p = partners[Math.floor(Math.random()*partners.length)];
-        group.push(p.n); pool.splice(p.i,1);
-      }
-      set("粗篩", group.length ? group : ["缺人"]);
-    }
-  }else{
-    for(const n of results["粗篩"]) pool = pool.filter(x=>x!==n);
-  }
-
-  // 2) ABF / CDJ（含小幫手）
-  const abfAllow = allowedSetFor("ABF", tomoe, d3i);
-  const cdjAllow = allowedSetFor("CDJ", tomoe, d3i);
-
-  const takeLocked = (area)=>{
-    const lock = day.manualLocks[area]||[];
-    if(lock.length){ set(area, lock.slice()); lock.forEach(n=>{ pool = pool.filter(x=>x!==n); }); return true; }
-    return false;
-  };
-  const abfLocked = takeLocked("ABF");
-  const cdjLocked = takeLocked("CDJ");
-
-  if(!abfLocked || !cdjLocked){
-    if(checked["ABF"] && checked["CDJ"] && abfHelperOn){
-      if(!abfLocked){ const abfMain = pickOne(pool,"ABF", abfAllow); if(abfMain) set("ABF", [ ...(results["ABF"]||[]), abfMain ]); }
-      if(!cdjLocked){ const cdjMain = pickOne(pool,"CDJ", cdjAllow); if(cdjMain) set("CDJ", [ ...(results["CDJ"]||[]), cdjMain ]); }
-      const helper  = pickOne(pool,"helper", null);
-      if(helper){
-        set("ABF", [ ...(results["ABF"]||[]), `${helper}(小幫手)` ]);
-        set("CDJ", [ ...(results["CDJ"]||[]), `${helper}(小幫手)` ]);
-      }
-    }else{
-      if(checked["ABF"] && !abfLocked){ const who=pickOne(pool,"ABF", abfAllow); if(who) set("ABF", [who]); }
-      if(!checked["ABF"] && !abfLocked) set("ABF", ["（未開機）"]);
-      if(checked["CDJ"] && !cdjLocked){ const who=pickOne(pool,"CDJ", cdjAllow); if(who) set("CDJ", [who]); }
-      if(!checked["CDJ"] && !cdjLocked) set("CDJ", ["（未開機）"]);
-    }
-  }
-
-  // 3) MNO / PQR / GH（各 1）
-  ["MNO","PQR","GH"].forEach(a=>{
-    if(day.manualLocks[a] && day.manualLocks[a].length){
-      set(a, day.manualLocks[a].slice());
-      day.manualLocks[a].forEach(n=>{ pool = pool.filter(x=>x!==n); });
-    }else{
-      if((checked||{})[a]){ const who = pickOne(pool, a, allowedSetFor(a, tomoe, d3i)); if(who) set(a, [who]); }
-      else set(a, ["（未開機）"]);
-    }
-  });
-
-  // 4) 洗球（剩餘且允許；再平衡；未分派）
-  if(day.manualLocks["洗球"] && day.manualLocks["洗球"].length){
-    set("洗球", day.manualLocks["洗球"].slice());
-    day.manualLocks["洗球"].forEach(n=>{ pool = pool.filter(x=>x!==n); });
-    set("未分派", pool.slice());
-  }else{
-    let washList = pool.filter(n=>canAssignBase(n,"洗球"));
-    set("洗球", washList);
-    let leftovers = pool.filter(n => !canAssignBase(n, "洗球"));
-    const adjustableAreas = ["ABF","CDJ","MNO","PQR","GH"].filter(a => (checked||{})[a]);
-    for (const L of [...leftovers]) {
-      for (const area of adjustableAreas) {
-        const arr = results[area] || [];
-        if (!arr.length) continue;
-        if (!canAssignToArea(L, area, tomoe, d3i)) continue;
-        const idx = arr.findIndex(S => S && !String(S).includes("(小幫手)") && canAssignBase(S, "洗球"));
-        if (idx >= 0) {
-          const S = arr[idx];
-          arr[idx] = L;
-          results[area] = arr.slice();
-          washList = washList.concat([S]);
-          set("洗球", washList);
-          leftovers = leftovers.filter(x => x !== L);
-          break;
-        }
-      }
-    }
-    set("未分派", leftovers);
-  }
-
-  day.results = results;
-  store[key] = day; save(store);
-  if(key===activeDate){ drawResults(results, day.manualLocks, resultBody); drawResults(results, day.manualLocks, mResultBody); }
-  renderWeek();
-}
-
-/* ========= 自動排班 ========= */
-function runForDay(key){
-  const store = load(); const day = store[key] || {};
-  day.manualLocks = day.manualLocks || {};
-  store[key]=day; save(store);
-  recomputeWithLocks(key);
-}
-
-/* ========= 結果表 + 點名字即換人（加入獨佔/多選與去重） ========= */
-function drawResults(results, manualLocks, tbody){
-  tbody.innerHTML="";
-  const isEditableArea = a => a!=="請假";
-  ALL_AREAS.forEach(a=>{
+/* 畫表 */
+function drawResults(results,checked){
+  const tbody=document.getElementById("resultBody");tbody.innerHTML="";
+  AREAS.forEach(a=>{
+    if(checked[a]===false) return;
     const tr=document.createElement("tr");
-    const tdA=document.createElement("td"); tdA.textContent=a;
-
+    const tdA=document.createElement("td");tdA.textContent=a;
     const tdP=document.createElement("td");
-    tdP.textContent = (results[a] && results[a].length) ? results[a].join("、") : "—";
-    if(isEditableArea(a)){
-      tdP.classList.add("editable","dropdown");
-      tdP.onclick = (e)=>{ e.stopPropagation(); openPicker(tdP, a); };
-    }
-    tr.append(tdA,tdP); tbody.append(tr);
+    const arr=results[a]||[];
+    if(arr.length){
+      tdP.className="editable";
+      arr.forEach((n,idx)=>{
+        const span=document.createElement("span");
+        span.textContent=n;
+        span.className="name";
+        span.onclick=(e)=>{e.stopPropagation();openPicker(tdP,a,idx,n)};
+        tdP.append(span);
+        if(idx<arr.length-1)tdP.append("、");
+      });
+    }else tdP.textContent="—";
+    tr.append(tdA,tdP);tbody.append(tr);
   });
 }
 
-/* 點名字即可換人（修：單槽獨佔、多槽可切換、標示來源區） */
-function openPicker(td, area){
+/* 名單替換 */
+function openPicker(td,area,idx,currentName){
   closeAnyPicker();
-  const store = load();
-  const day = store[activeDate] || {};
-  day.manualLocks = day.manualLocks || {};
-  const leaveSet = new Set(day.leave || []);
-  const tomoe  = day.tomoe || {};
-  const d3i    = day.d3i   || {};
-  const allowSet = allowedSetFor(area, tomoe, d3i);
-
-  const picker = document.createElement("div");
-  picker.className = "picker";
-
-  const hint = document.createElement("div");
-  hint.className = "hint";
-  hint.textContent = SINGLE_SLOT.has(area)
-    ? "點名字 → 此人將獨佔此區（並從其它區移除）"
-    : "點名字 → 加入/移除此區（會自動從其它區移除，避免重複）";
-  picker.append(hint);
-
-  const whereLocked = name => findLockedAreaOf(name, day.manualLocks);
-
+  const store=load();const day=store[activeDate]||{};
+  const tomoe=day.tomoe||{};const d3i=day.d3i||{};
+  const picker=document.createElement("div");picker.className="picker";
   PEOPLE.forEach(name=>{
-    const isOnLeave = leaveSet.has(name);
-    const okByRule  = allowSet ? allowSet.has(name) : true;
-    const okByArea  = canAssignToArea(name, area, tomoe, d3i);
-    const elsewhere = whereLocked(name);
-    const isHere    = (day.manualLocks[area]||[]).includes(name);
-
-    // 可點條件：不能請假；必須符合規則；（若在別區，仍可點，會搬過來）
-    const enabled   = !isOnLeave && okByRule && okByArea;
-
-    const row = document.createElement("div");
-    row.className = "row" + (enabled ? "" : " disabled");
-    row.style.cursor = enabled ? "pointer" : "default";
-
-    const label = document.createElement("span");
-    let tail = "";
-    if(elsewhere && elsewhere!==area) tail = `（將從${elsewhere}移到此）`;
-    if(isHere) tail = "（已在此）";
-    if(!enabled && isOnLeave) tail = "（請假）";
-    if(!enabled && !okByArea) tail = "（不符合規則）";
-    label.textContent = name + (tail?tail:"");
-    row.append(label);
-
+    const enabled=canAssign(name,area,tomoe,d3i);
+    const row=document.createElement("div");
+    row.className="row"+(enabled?"":" disabled");
+    row.textContent=name+(name===currentName?"（目前）":(enabled?"":"（不可）"));
     if(enabled){
-      row.onclick = ()=>{
-        const st=load(); const d=st[activeDate]||{};
-        d.manualLocks = d.manualLocks || {};
-
-        if(SINGLE_SLOT.has(area)){
-          // 獨佔：先從所有區移除，再放入此區單人
-          removeFromAllAreas(d.manualLocks, name);
-          d.manualLocks[area] = [name];
-        }else{
-          // 多槽：切換（toggle）
-          const list = Array.isArray(d.manualLocks[area]) ? d.manualLocks[area] : [];
-          if(list.includes(name)){
-            d.manualLocks[area] = list.filter(x=>x!==name);
-          }else{
-            // 新增前先從其它區移除，確保不重複
-            removeFromAllAreas(d.manualLocks, name);
-            d.manualLocks[area] = [...list, name];
-          }
-        }
-        st[activeDate]=d; save(st);
-        recomputeWithLocks(activeDate);
-        closeAnyPicker();
+      row.onclick=()=>{
+        const store=load();const d=store[activeDate]||{results:{}};
+        d.results[area][idx]=name;
+        store[activeDate]=d;save(store);
+        drawResults(d.results,d.checked||{});renderWeek();closeAnyPicker();
       };
     }
     picker.append(row);
   });
-
-  const actions = document.createElement("div");
-  actions.className = "actions";
-  const btnClear = document.createElement("button");
-  btnClear.className = "clear";
-  btnClear.textContent = "清空此區鎖定";
-  btnClear.onclick = ()=>{
-    const st=load(); const d=st[activeDate]||{};
-    d.manualLocks = d.manualLocks || {}; d.manualLocks[area] = [];
-    st[activeDate]=d; save(st);
-    recomputeWithLocks(activeDate);
-    closeAnyPicker();
-  };
-  actions.append(btnClear);
-  picker.append(actions);
-
-  td.appendChild(picker);
-
-  // 防止超出畫面
-  const rect = picker.getBoundingClientRect();
-  const vh = window.innerHeight;
-  if(rect.bottom > vh) picker.style.maxHeight = (vh - rect.top - 12) + "px";
-
-  setTimeout(()=>{
-    const closer = (e)=>{
-      if(!picker.contains(e.target)){ closeAnyPicker(); document.removeEventListener("mousedown", closer); }
-    };
-    document.addEventListener("mousedown", closer, {passive:true});
-  },0);
+  td.style.position="relative";td.append(picker);
 }
-function closeAnyPicker(){ document.querySelectorAll(".picker").forEach(p=>p.remove()); }
+function closeAnyPicker(){document.querySelectorAll(".picker").forEach(p=>p.remove());}
 
-function persistDay(patch){
-  if(!activeDate) return;
-  const store = load();
-  const day = store[activeDate] || {};
-  store[activeDate] = {...day, ...patch};
-  save(store);
-  renderWeek();
-}
+/* 自動排班邏輯 */
+function coreByDate(dateStr){const day=new Date(dateStr).getDate();return(day%2===1)?"佳雯":"阿美";}
+function autoScheduleOne(dateStr){
+  const store=load();const d=store[dateStr]||{results:{},checked:{ABF:true,CDJ:true,MNO:true,PQR:true,GH:true}};
+  const results={};let pool=shuffle([...PEOPLE]);
+  const checked=d.checked||{};
 
-/* ====== 共用控制：小幫手 & 按鈕（含未選日期提示） ====== */
-document.getElementById("abfHelper").addEventListener('change', e=>{ if(!activeDate) return; persistDay({abfHelper:e.target.checked}); });
+  // 請假剔除
+  const leave=new Set(d.leave||[]);
+  pool=pool.filter(x=>!leave.has(x));
 
-document.getElementById("run").onclick = ()=>{
-  if (!activeDate) { alert("請先點上方某一天卡片，再按『自動排班』。"); return; }
-  runForDay(activeDate);
-};
-document.getElementById("clearResults").onclick = ()=>{
-  if(!activeDate){ alert("請先選擇日期再清空。"); return; }
-  const store=load(); store[activeDate]=store[activeDate]||{}; store[activeDate].results={}; store[activeDate].manualLocks={}; save(store);
-  syncControls(); renderWeek();
-};
-document.getElementById("saveOnly").onclick = ()=>{ if(activeDate) alert("已保存開機 / 小幫手 / TOMOE / D3I / 請假設定。"); else alert("請先選日期。"); };
+  // 粗篩
+  const core=coreByDate(dateStr);
+  const rough=[];
+  if(!leave.has(core)&&canAssign(core,"粗篩")){pool=pool.filter(x=>x!==core);rough.push(core);}
+  const partner=pool.find(n=>canAssign(n,"粗篩")&&n!=="佳雯"&&n!=="阿美");
+  if(partner){pool=pool.filter(x=>x!==partner);rough.push(partner);}
+  results["粗篩"]=rough;
 
-/* ========= 手機抽屜（手勢） ========= */
-const fab = document.getElementById("fab");
-const drawer = document.getElementById("drawer");
-const scrim = document.getElementById("scrim");
-const dragHandle = document.getElementById("dragHandle");
+  // ABF/CDJ
+  if(checked.ABF){const who=pool.find(n=>canAssign(n,"ABF",d.tomoe,d.d3i));if(who){pool=pool.filter(x=>x!==who);results["ABF"]=[who];}}
+  if(checked.CDJ){const who=pool.find(n=>canAssign(n,"CDJ",d.tomoe,d.d3i));if(who){pool=pool.filter(x=>x!==who);results["CDJ"]=[who];}}
 
-let startY = 0, currentY = 0, drawerHeight = 0, dragging = false;
-const OPEN_THRESHOLD = 80;
-const clamp = (v,min,max)=>Math.min(max,Math.max(min,v));
-
-function setDrawerTranslateY(px){
-  drawer.style.transition = 'none';
-  drawer.style.transform = `translateY(${px}px)`;
-  const ratio = clamp(px / drawerHeight, 0, 1);
-  scrim.style.opacity = String(1 - ratio);
-}
-function openDrawer(){
-  drawer.classList.add('open');
-  drawer.style.transition = '';
-  drawer.style.transform = '';
-  scrim.classList.add('show');
-}
-function closeDrawer(){
-  drawer.classList.remove('open');
-  drawer.style.transition = '';
-  drawer.style.transform = '';
-  scrim.classList.remove('show');
-}
-
-function onDragStart(clientY){
-  dragging = true;
-  const rect = drawer.getBoundingClientRect();
-  drawerHeight = rect.height;
-  startY = clientY;
-  currentY = 0;
-  if(!drawer.classList.contains('open')){
-    drawer.style.transform = `translateY(${drawerHeight}px)`;
-    scrim.classList.add('show');
-  }
-}
-function onDragMove(clientY){
-  if(!dragging) return;
-  const delta = clientY - startY;
-  const base = drawer.classList.contains('open') ? 0 : drawerHeight;
-  const y = clamp(base + delta, 0, drawerHeight);
-  currentY = y;
-  setDrawerTranslateY(y);
-}
-function onDragEnd(){
-  if(!dragging) return;
-  drawer.style.transition = 'transform .2s ease';
-  const halfway = drawerHeight / 2;
-  if(drawer.classList.contains('open')){
-    if(currentY > Math.max(OPEN_THRESHOLD, halfway * 0.6)){ closeDrawer(); }
-    else{ openDrawer(); }
-  }else{
-    if(currentY < drawerHeight - Math.max(OPEN_THRESHOLD, halfway * 0.6)){ openDrawer(); }
-    else{ closeDrawer(); }
-  }
-  dragging = false;
-}
-
-[drawer, dragHandle].forEach(el=>{
-  el.addEventListener('touchstart', e=>{ onDragStart(e.touches[0].clientY); }, {passive:true});
-  el.addEventListener('touchmove',  e=>{ onDragMove(e.touches[0].clientY); }, {passive:true});
-  el.addEventListener('touchend',   e=>{ onDragEnd(); }, {passive:true});
-
-  el.addEventListener('mousedown', e=>{ onDragStart(e.clientY); });
-  window.addEventListener('mousemove', e=>{ if(dragging) onDragMove(e.clientY); });
-  window.addEventListener('mouseup',   e=>{ if(dragging) onDragEnd(); });
-});
-
-fab.addEventListener('click', ()=>{
-  if(drawer.classList.contains('open')) closeDrawer(); else openDrawer();
-});
-scrim.addEventListener('click', closeDrawer);
-
-/* 手機面板按鈕（同提示） */
-document.getElementById("mAbfHelper").addEventListener('change', e=>{ if(!activeDate) return; persistDay({abfHelper:e.target.checked}); });
-document.getElementById("mRun").onclick = ()=>{
-  if (!activeDate) { alert("請先點上方某一天卡片，再按『自動排班』。"); return; }
-  runForDay(activeDate);
-};
-document.getElementById("mClearResults").onclick = ()=>{
-  if(!activeDate){ alert("請先選擇日期再清空。"); return; }
-  const store=load(); store[activeDate]=store[activeDate]||{}; store[activeDate].results={}; store[activeDate].manualLocks={}; save(store);
-  syncControls(); renderWeek();
-};
-document.getElementById("mSaveOnly").onclick = ()=>{ if(activeDate) alert("已保存開機 / 小幫手 / TOMOE / D3I / 請假設定。"); else alert("請先選日期。"); };
-
-/* ========= 初始化 ========= */
-function buildAreaControls(rootIdPrefix){
-  const areaRoot = rootIdPrefix === "m" ? mAreaControls : areaControls;
-  areaRoot.innerHTML = "";
-  AREAS_WITH_CHECK.forEach(area=>{
-    const wrap = document.createElement("label");
-    Object.assign(wrap.style,{display:"flex",alignItems:"center",gap:"8px",padding:"8px 12px"});
-    const cb = document.createElement("input"); cb.type="checkbox"; cb.dataset.area=area;
-    const nameNode = document.createTextNode(area);
-
-    const tomoeBox = document.createElement("span"); tomoeBox.className="optBox";
-    const tomoeCb = document.createElement("input"); tomoeCb.type="checkbox"; tomoeCb.dataset.tomoe=area;
-    tomoeBox.append(tomoeCb, document.createTextNode("TOMOE"));
-
-    const d3iBox = document.createElement("span"); d3iBox.className="optBox";
-    const d3iCb = document.createElement("input"); d3iCb.type="checkbox"; d3iCb.dataset.d3i=area;
-    d3iBox.append(d3iCb, document.createTextNode("D3I"));
-    if(area!=="ABF") d3iBox.style.display="none";
-
-    cb.addEventListener("change", ()=>{
-      if(!activeDate) return;
-      const store=load(); const day=store[activeDate]||{};
-      day.checked=day.checked||{}; day.checked[area]=cb.checked;
-      if(!cb.checked){
-        tomoeCb.checked=false; d3iCb.checked=false;
-        day.tomoe = day.tomoe || {}; day.tomoe[area]=false;
-        day.d3i   = day.d3i   || {}; day.d3i[area]=false;
-      }
-      store[activeDate]=day; save(store);
-      syncControls(); renderWeek();
-    });
-    tomoeCb.addEventListener("change", ()=>{ if(!activeDate) return; const s=load(); const d=s[activeDate]||{}; d.tomoe=d.tomoe||{}; d.tomoe[area]=tomoeCb.checked; s[activeDate]=d; save(s); });
-    d3iCb.addEventListener("change", ()=>{ if(!activeDate) return; const s=load(); const d=s[activeDate]||{}; d.d3i=d.d3i||{}; d.d3i[area]=d3iCb.checked; s[activeDate]=d; save(s); });
-
-    wrap.append(cb, nameNode, tomoeBox, d3iBox);
-    areaRoot.append(wrap);
+  // MNO/PQR/GH
+  ["MNO","PQR","GH"].forEach(a=>{
+    if(checked[a]){const who=pool.find(n=>canAssign(n,a));if(who){pool=pool.filter(x=>x!==who);results[a]=[who];}}
   });
+
+  // 洗球
+  results["洗球"]=pool.filter(n=>canAssign(n,"洗球"));
+  results["支援"]=results["支援"]||[];
+  results["請假"]=[...leave];
+
+  d.results=results;store[dateStr]=d;save(store);
+  if(activeDate===dateStr){drawResults(results,d.checked);}
 }
-buildAreaControls("");  // 桌機
-buildAreaControls("m"); // 手機
+
+function autoScheduleWeek(){weekRange(currentMonday).forEach(d=>autoScheduleOne(fmt(d)));renderWeek();}
+document.getElementById("autoWeek").onclick=autoScheduleWeek;
+document.getElementById("autoToday").onclick=()=>{
+  if(!activeDate){alert("請先選一天");return;}
+  autoScheduleOne(activeDate);renderWeek();
+};
+
+/* 初始化 */
 renderWeek();
 </script>
 </body>
