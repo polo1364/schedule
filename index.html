@@ -22,6 +22,7 @@
   header button{border:none;background:#3b82f6;color:#fff;padding:8px 12px;border-radius:9px;cursor:pointer}
   header button:hover{background:#2563eb}
   #weekLabel{font-size:14px;opacity:.9}
+
   .grid{display:grid;gap:12px;padding:12px}
   @media(min-width:600px){.grid{grid-template-columns:repeat(2,1fr)}}
   @media(min-width:900px){.grid{grid-template-columns:repeat(4,1fr)}}
@@ -30,8 +31,6 @@
   .day{border:1px solid var(--border);border-radius:12px;padding:8px;cursor:pointer;box-shadow:var(--shadow);transition:all .15s ease}
   .day .date{font-weight:700;margin-bottom:4px;font-size:13px;border:1px solid var(--border);display:inline-block;border-radius:8px;padding:4px 8px}
   .day .summary{font-size:12px}
-
-  /* 預設灰（未選）／選中顯白 */
   .day.inactive{background:#d1d5db;color:#6b7280;opacity:.85}
   .day.inactive .date{background:#e5e7eb;color:#6b7280}
   .day.active{background:var(--card);color:var(--text);opacity:1}
@@ -72,8 +71,8 @@
     <button id="nextWeek">下一週 →</button>
   </div>
   <div class="leftwrap">
-    <button id="autoWeek">⚡ 一鍵自動排整週</button>
-    <button id="autoToday">⚡ 自動排當天</button>
+    <button id="autoWeek">⚡ 一鍵自動排整週（僅反白）</button>
+    <button id="autoToday">⚡ 自動排當天（需反白）</button>
   </div>
 </header>
 
@@ -83,14 +82,14 @@
   <div class="panelGrid">
     <!-- 設定側欄 -->
     <div class="card">
-      <h3 id="panelTitle">請先點上方某一天（卡片灰色＝未選）</h3>
+      <h3 id="panelTitle">請點選要排班的日期（卡片灰色＝不排；白色＝要排）</h3>
       <div class="areaCtrl" id="ctrls" style="display:none">
         <div class="row"><label><input type="checkbox" id="abfOn"> ABF 開機</label> <label><input type="checkbox" id="abfTomoe"> TOMOE</label> <label><input type="checkbox" id="abfD3i"> D3I</label></div>
         <div class="row"><label><input type="checkbox" id="cdjOn"> CDJ 開機</label> <label><input type="checkbox" id="cdjTomoe"> TOMOE</label></div>
         <div class="row"><label><input type="checkbox" id="mnoOn"> MNO 開機</label> <label><input type="checkbox" id="mnoTomoe"> TOMOE</label></div>
         <div class="row"><label><input type="checkbox" id="pqrOn"> PQR 開機</label> <label><input type="checkbox" id="pqrTomoe"> TOMOE</label></div>
         <div class="row"><label><input type="checkbox" id="ghOn"> GH 開機</label> <label><input type="checkbox" id="ghTomoe"> TOMOE</label></div>
-        <div class="row"><label><input type="checkbox" id="abfHelper"> 小幫手</label></div>
+        <div class="row"><label><input type="checkbox" id="abfHelper"> 小幫手（與 CDJ 共用，可點名替換）</label></div>
 
         <div><strong>請假</strong></div>
         <div class="chips" id="leaveChips"></div>
@@ -105,14 +104,14 @@
         <thead><tr><th>工作區域</th><th>人員</th></tr></thead>
         <tbody id="resultBody"></tbody>
       </table>
-      <div class="muted" style="margin-top:6px">提示：點名字可直接替換；點 <code>(小幫手)</code> 亦可替換，會同步套用 ABF/CDJ；不合規會顯示「不可」。</div>
+      <div class="muted" style="margin-top:6px">提示：點名字可直接替換；點 <code>(小幫手)</code> 亦可替換（同步影響 ABF/CDJ）。替換後系統會自動補位。</div>
     </div>
   </div>
 </section>
 
 <script>
 /* ====== 常量與資料 ====== */
-const LS_KEY = "weekly_full_final_activecard_helperreplace_v1";
+const LS_KEY = "weekly_full_final_multiselect_autofill_v1";
 const PEOPLE = ["佳雯","盈儒","忻潔","阿美","美琪","小瑰","靜媚","韶湄","汶倩","麗凰","奕瑄","小雯","惠玲"];
 const EN_AREAS = ["ABF","CDJ","MNO","PQR","GH"];  // 有開機與 TOMOE 選項
 const ALL_AREAS = ["ABF","CDJ","MNO","PQR","GH","粗篩","洗球","支援","請假"];
@@ -120,15 +119,8 @@ const SUMMARY_ORDER = ["ABF","CDJ","MNO","PQR","GH","粗篩","洗球","支援","
 
 const TOMOE_ALLOWED = new Set(["佳雯","惠玲"]);
 const D3I_ALLOWED   = new Set(["美琪","佳雯","惠玲"]);
-
-/* 限制規則 */
-const CANNOT = {
-  "洗球": new Set(["阿美","佳雯","靜媚"]),
-  "粗篩": new Set(["靜媚"])
-};
-const ALLOW_ONLY = {
-  "美琪": new Set(["ABF","helper","洗球"]) // helper 供小幫手用
-};
+const CANNOT = { "洗球": new Set(["阿美","佳雯","靜媚"]), "粗篩": new Set(["靜媚"]) };
+const ALLOW_ONLY = { "美琪": new Set(["ABF","helper","洗球"]) };
 
 /* ====== 小工具 ====== */
 function fmt(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
@@ -149,8 +141,6 @@ const resultBody = document.getElementById("resultBody");
 const panelTitle = document.getElementById("panelTitle");
 const ctrls = document.getElementById("ctrls");
 const leaveChips = document.getElementById("leaveChips");
-
-/* 勾選控制項 DOM */
 const el = {
   abfOn:document.getElementById("abfOn"), abfTomoe:document.getElementById("abfTomoe"), abfD3i:document.getElementById("abfD3i"),
   cdjOn:document.getElementById("cdjOn"), cdjTomoe:document.getElementById("cdjTomoe"),
@@ -172,10 +162,7 @@ function canAssign(name, area, tomoe, d3i){
   if (!allowedByTomoeAndD3I(name, area, tomoe, d3i)) return false;
   return true;
 }
-function coreByDate(dateStr){
-  const day = new Date(dateStr).getDate();
-  return (day % 2 === 1) ? "佳雯" : "阿美"; // 奇=佳雯、偶=阿美
-}
+function coreByDate(dateStr){ const day=new Date(dateStr).getDate(); return (day%2===1)?"佳雯":"阿美"; }
 
 /* ====== 週卡片與摘要 ====== */
 function buildSummary(dayData){
@@ -198,43 +185,75 @@ function renderWeek(){
   days.forEach(d=>{
     const key = fmt(d);
     const card = document.createElement("div");
-    card.className = (activeDate && activeDate===key) ? "day active" : "day inactive";
-    card.onclick = ()=> openDay(key);
+    // 預設灰；若已被選中就白
+    const selected = store.__selected && store.__selected.includes(key);
+    card.className = selected ? "day active" : "day inactive";
+    card.onclick = ()=> toggleSelectDay(key, card); // 多選反白
     const data = store[key] || {};
     card.innerHTML = `<div class="date">${key}</div><div class="summary">${buildSummary(data)}</div>`;
     grid.append(card);
   });
 }
 
-/* ====== 開啟某一天（選中才可排班） ====== */
-function openDay(key){
-  activeDate = key;
-  panelTitle.textContent = `設定：${key}`;
-  ctrls.style.display = ""; // 顯示控制面板
+/* 多選反白切換 + 開啟右側（選到的最後一個為 activeDate） */
+function toggleSelectDay(key, cardEl){
+  const s=load(); s.__selected = s.__selected || [];
+  const idx = s.__selected.indexOf(key);
+  if(idx>=0){ s.__selected.splice(idx,1); } else { s.__selected.push(key); }
+  save(s);
+  renderWeek();
 
-  // 標記選中狀態（顯白）
-  document.querySelectorAll(".day").forEach(el=>{
-    const dateText = el.querySelector(".date")?.textContent;
-    if(dateText === key){ el.classList.remove("inactive"); el.classList.add("active"); }
-    else { el.classList.remove("active"); el.classList.add("inactive"); }
-  });
+  // 若此日被選中，設為當前 activeDate，顯示右側控制
+  const selectedNow = (s.__selected || []).includes(key);
+  if(selectedNow){
+    activeDate = key;
+    panelTitle.textContent = `設定：${key}（已反白，可排）`;
+    ctrls.style.display = "";
+    ensureDayKey(key);
+    syncControls();
+    const store=load(); drawResults(store[key].results||{}, store[key].checked||{});
+  }else{
+    // 若取消選取且沒有任何被選取的日子，就收起控制
+    const s2=load();
+    if(!(s2.__selected && s2.__selected.length)){
+      activeDate = null;
+      panelTitle.textContent = `請點選要排班的日期（卡片灰色＝不排；白色＝要排）`;
+      ctrls.style.display = "none";
+      resultBody.innerHTML = "";
+    }else{
+      // 切到尚存的第一個選中日
+      activeDate = s2.__selected[0];
+      panelTitle.textContent = `設定：${activeDate}（已反白，可排）`;
+      ctrls.style.display = "";
+      ensureDayKey(activeDate);
+      syncControls();
+      const store=load(); drawResults(store[activeDate].results||{}, store[activeDate].checked||{});
+    }
+  }
+}
 
-  const store = load();
-  if (!store[key]) {
-    store[key] = {
-      checked:{ABF:true,CDJ:true,MNO:true,PQR:true,GH:true},
-      tomoe:{}, d3i:{}, abfHelper:false, leave:[], results:{}
-    };
+function ensureDayKey(key){
+  const store=load();
+  if(!store[key]){
+    store[key] = { checked:{ABF:true,CDJ:true,MNO:true,PQR:true,GH:true}, tomoe:{}, d3i:{}, abfHelper:false, leave:[], results:{} };
     save(store);
   }
-  syncControls();
-  drawResults(store[key].results, store[key].checked);
 }
 
 /* ====== 同步右側控制項 ====== */
 function syncControls(){
+  if(!activeDate) return;
   const s = load(); const day = s[activeDate] || {};
   const {checked={}, tomoe={}, d3i={}, abfHelper=false, leave=[]} = day;
+
+  const el = {
+    abfOn:document.getElementById("abfOn"), abfTomoe:document.getElementById("abfTomoe"), abfD3i:document.getElementById("abfD3i"),
+    cdjOn:document.getElementById("cdjOn"), cdjTomoe:document.getElementById("cdjTomoe"),
+    mnoOn:document.getElementById("mnoOn"), mnoTomoe:document.getElementById("mnoTomoe"),
+    pqrOn:document.getElementById("pqrOn"), pqrTomoe:document.getElementById("pqrTomoe"),
+    ghOn:document.getElementById("ghOn"),   ghTomoe:document.getElementById("ghTomoe"),
+    abfHelper:document.getElementById("abfHelper")
+  };
 
   el.abfOn.checked = checked.ABF ?? true;
   el.cdjOn.checked = checked.CDJ ?? true;
@@ -261,30 +280,13 @@ function syncControls(){
     leaveChips.append(lab);
   });
 
-  // 綁定變更
-  const bindCheck = (elem, path, key, after=()=>{})=>{
-    elem.onchange = ()=>{
-      const st=load(); const d=st[activeDate]||{};
-      d[path]=d[path]||{}; d[path][key]=elem.checked; st[activeDate]=d; save(st);
-      after(d);
-      renderWeek();
-    };
-  };
-  bindCheck(el.abfOn,"checked","ABF");
-  bindCheck(el.cdjOn,"checked","CDJ");
-  bindCheck(el.mnoOn,"checked","MNO");
-  bindCheck(el.pqrOn,"checked","PQR");
-  bindCheck(el.ghOn,"checked","GH");
-
-  bindCheck(el.abfTomoe,"tomoe","ABF");
-  bindCheck(el.cdjTomoe,"tomoe","CDJ");
-  bindCheck(el.mnoTomoe,"tomoe","MNO");
-  bindCheck(el.pqrTomoe,"tomoe","PQR");
-  bindCheck(el.ghTomoe,"tomoe","GH");
-
+  // 綁定變更 → 存檔 + 不動當前內容（你可再按自動或手動微調）
+  const bindCheck = (elem, path, key)=>{ elem.onchange = ()=>{ const st=load(); const d=st[activeDate]||{}; d[path]=d[path]||{}; d[path][key]=elem.checked; st[activeDate]=d; save(st); renderWeek(); }; };
+  bindCheck(el.abfOn,"checked","ABF"); bindCheck(el.cdjOn,"checked","CDJ"); bindCheck(el.mnoOn,"checked","MNO"); bindCheck(el.pqrOn,"checked","PQR"); bindCheck(el.ghOn,"checked","GH");
+  bindCheck(el.abfTomoe,"tomoe","ABF"); bindCheck(el.cdjTomoe,"tomoe","CDJ"); bindCheck(el.mnoTomoe,"tomoe","MNO"); bindCheck(el.pqrTomoe,"tomoe","PQR"); bindCheck(el.ghTomoe,"tomoe","GH");
   bindCheck(el.abfD3i,"d3i","ABF");
 
-  // 小幫手切換：關閉時移除 ABF/CDJ 的小幫手
+  // 小幫手開關：關掉時移除 ABF/CDJ 的小幫手
   el.abfHelper.onchange = ()=>{
     const st=load(); const d=st[activeDate]||{};
     d.abfHelper = el.abfHelper.checked;
@@ -320,12 +322,12 @@ function drawResults(results){
     tr.append(tdA,tdP); resultBody.append(tr);
   });
 }
+
 function openPicker(td, area, idx, currentName){
   closeAnyPicker();
   const s=load(); const day=s[activeDate]||{};
   const {tomoe={}, d3i={}, leave=[], checked={}, abfHelper=false} = day;
   const leaveSet=new Set(leave);
-
   const helperMode = (area==="ABF" || area==="CDJ") && isHelperTag(currentName);
 
   const picker=document.createElement("div"); picker.className="picker";
@@ -333,7 +335,6 @@ function openPicker(td, area, idx, currentName){
   list.forEach(name=>{
     let enabled;
     if(helperMode){
-      // 小幫手規則：不可請假；若有人員限制，需允許 helper；不受 TOMOE/D3I 約束
       enabled = !leaveSet.has(name) && (!ALLOW_ONLY[name] || ALLOW_ONLY[name].has("helper"));
     }else{
       enabled = !leaveSet.has(name) && canAssign(name, area, tomoe, d3i);
@@ -348,7 +349,7 @@ function openPicker(td, area, idx, currentName){
         const store=load(); const d=store[activeDate]||{};
         d.results=d.results||{}; d.results[area]=d.results[area]||[];
 
-        // 先把新人從其他區域移除，避免重複
+        // 把新人從其他區域移除，避免重複
         for(const a of ALL_AREAS){
           if(!Array.isArray(d.results[a])) continue;
           d.results[a] = d.results[a].filter(x=>stripHelper(x)!==name);
@@ -361,7 +362,6 @@ function openPicker(td, area, idx, currentName){
             const i = d.results[A].findIndex(x=>isHelperTag(x));
             if(i>=0) d.results[A][i] = `${name}(小幫手)`;
             else if(checked[A]!==false && abfHelper){
-              // 若勾了小幫手但某區沒小幫手字樣，補上
               d.results[A].push(`${name}(小幫手)`);
             }
           });
@@ -371,6 +371,10 @@ function openPicker(td, area, idx, currentName){
         }
 
         store[activeDate]=d; save(store);
+
+        // ⭐ 替換後：自動補位（只補空缺、不動你剛手動指定的人）
+        autoFillRemaining(activeDate);
+
         drawResults(d.results, d.checked||{}); renderWeek(); closeAnyPicker();
       };
     }
@@ -380,7 +384,96 @@ function openPicker(td, area, idx, currentName){
 }
 function closeAnyPicker(){ document.querySelectorAll(".picker").forEach(p=>p.remove()); }
 
-/* ====== 自動排班：單日與整週 ====== */
+/* ====== 自動補位（手動替換後呼叫） ====== */
+function autoFillRemaining(dateStr){
+  const st=load(); const day=st[dateStr]; if(!day) return;
+  const {results={}, checked={}, tomoe={}, d3i={}, abfHelper=false, leave=[]} = day;
+
+  // 1) 建立已佔用名單（不含小幫手標記）
+  const used = new Set();
+  for(const a of ALL_AREAS){
+    (results[a]||[]).forEach(n=> used.add(stripHelper(n)));
+  }
+  const leaveSet = new Set(leave);
+  let pool = PEOPLE.filter(n=> !leaveSet.has(n) && !used.has(n));
+
+  // 工具：挑一個人（不破壞現有手動指定）
+  const pick = (area, extraRule=()=>true)=>{
+    for(let i=0;i<pool.length;i++){
+      const name=pool[i];
+      if(canAssign(name, area, tomoe, d3i) && extraRule(name)){
+        pool.splice(i,1);
+        used.add(name);
+        return name;
+      }
+    }
+    return null;
+  };
+
+  // 2) 粗篩：補到 2 人（優先補核心）
+  results["粗篩"]=results["粗篩"]||[];
+  const rough = results["粗篩"].map(stripHelper);
+  const needCore = coreByDate(dateStr);
+  if(!rough.includes(needCore) && !leaveSet.has(needCore) && canAssign(needCore,"粗篩",tomoe,d3i) && !used.has(needCore)){
+    results["粗篩"].push(needCore);
+    used.add(needCore);
+    pool = pool.filter(n=>n!==needCore);
+  }
+  while((results["粗篩"].length)<2){
+    const who = pick("粗篩", n=> n!=="佳雯" && n!=="阿美");
+    if(!who) break;
+    results["粗篩"].push(who);
+  }
+
+  // 3) ABF/CDJ/MNO/PQR/GH：若區域開機且主員缺，補 1 名
+  ["ABF","CDJ","MNO","PQR","GH"].forEach(a=>{
+    if(checked[a]===false){ results[a]=results[a]||[]; return; }
+    results[a]=results[a]||[];
+    // 主員 = 不是小幫手的名字
+    const mains = results[a].filter(x=>!isHelperTag(x));
+    if(mains.length===0){
+      const who = pick(a);
+      if(who) results[a].unshift(who);
+    }
+  });
+
+  // 4) 小幫手：若有開啟且缺少，補 1 名（同步 ABF/CDJ）
+  if(checked.ABF!==false && checked.CDJ!==false && abfHelper){
+    const hasHelperABF = (results["ABF"]||[]).some(isHelperTag);
+    const hasHelperCDJ = (results["CDJ"]||[]).some(isHelperTag);
+    if(!hasHelperABF || !hasHelperCDJ){
+      // 小幫手資格：允許 helper（美琪特例），不看 TOMOE/D3I
+      let idx = pool.findIndex(n => (!ALLOW_ONLY[n] || ALLOW_ONLY[n].has("helper")));
+      if(idx>=0){
+        const helper = pool.splice(idx,1)[0];
+        if(!results["ABF"]) results["ABF"]=[];
+        if(!results["CDJ"]) results["CDJ"]=[];
+        // 先移除可能殘留的小幫手
+        results["ABF"] = results["ABF"].filter(x=>!isHelperTag(x));
+        results["CDJ"] = results["CDJ"].filter(x=>!isHelperTag(x));
+        results["ABF"].push(`${helper}(小幫手)`);
+        results["CDJ"].push(`${helper}(小幫手)`);
+        used.add(helper);
+      }
+    }
+  }else{
+    // 若沒開啟小幫手，把標記清掉
+    if(results["ABF"]) results["ABF"]=results["ABF"].filter(x=>!isHelperTag(x));
+    if(results["CDJ"]) results["CDJ"]=results["CDJ"].filter(x=>!isHelperTag(x));
+  }
+
+  // 5) 洗球：保留已存在的，另外把剩餘可排的人全塞進來
+  const existingWash = (results["洗球"]||[]).map(stripHelper);
+  const keepSet = new Set(existingWash); // 原洗球手動不動
+  const extra = pool.filter(n=> canAssign(n,"洗球",tomoe,d3i) && !keepSet.has(n));
+  results["洗球"] = [...(results["洗球"]||[]), ...extra];
+
+  st[dateStr].results = results;
+  save(st);
+}
+
+/* ====== 自動排班：單日與整週（僅反白） ====== */
+function ensureSelected(){ const s=load(); return (s.__selected||[]).slice(); }
 function autoScheduleOne(dateStr){
   const st=load(); const day=st[dateStr]||{checked:{},tomoe:{},d3i:{},abfHelper:false,leave:[],results:{}};
   const {checked={}, tomoe={}, d3i={}, abfHelper=false} = day;
@@ -396,50 +489,46 @@ function autoScheduleOne(dateStr){
     return null;
   };
 
-  // 1) 粗篩（優先）
-  const group=[];
+  // 粗篩
+  const rough=[];
   let core = (new Date(dateStr).getDate()%2===1) ? "佳雯" : "阿美";
   if(leaveSet.has(core)) core = (core==="佳雯") ? "阿美" : "佳雯";
   if(!leaveSet.has(core) && canAssign(core,"粗篩",tomoe,d3i)){
-    const i=pool.indexOf(core); if(i>=0){ pool.splice(i,1); group.push(core); }
+    const i=pool.indexOf(core); if(i>=0){ pool.splice(i,1); rough.push(core); }
   }
   const partnerIdx = pool.findIndex(n=> n!=="佳雯" && n!=="阿美" && canAssign(n,"粗篩",tomoe,d3i));
-  if(partnerIdx>=0){ group.push(pool.splice(partnerIdx,1)[0]); }
-  if(group.length<2){
-    while(group.length<2 && pool.length){
+  if(partnerIdx>=0){ rough.push(pool.splice(partnerIdx,1)[0]); }
+  if(rough.length<2){
+    while(rough.length<2 && pool.length){
       const pIdx = pool.findIndex(n=>canAssign(n,"粗篩",tomoe,d3i));
       if(pIdx<0) break;
-      group.push(pool.splice(pIdx,1)[0]);
+      rough.push(pool.splice(pIdx,1)[0]);
     }
   }
-  results["粗篩"] = group;
+  results["粗篩"]=rough;
 
-  // 2) ABF / CDJ（含小幫手、TOMOE、D3I）
-  if(checked.ABF!==false){
-    const abfMain = takeOne("ABF"); if(abfMain) results["ABF"]=[abfMain];
-  }else{ results["ABF"]=[]; }
-  if(checked.CDJ!==false){
-    const cdjMain = takeOne("CDJ"); if(cdjMain) results["CDJ"]=[cdjMain];
-  }else{ results["CDJ"]=[]; }
+  // ABF / CDJ
+  if(checked.ABF!==false){ const abfMain = takeOne("ABF"); if(abfMain) results["ABF"]=[abfMain]; } else { results["ABF"]=[]; }
+  if(checked.CDJ!==false){ const cdjMain = takeOne("CDJ"); if(cdjMain) results["CDJ"]=[cdjMain]; } else { results["CDJ"]=[]; }
 
+  // 小幫手
   if(checked.ABF!==false && checked.CDJ!==false && abfHelper){
-    const helperIdx = pool.findIndex(n => (!ALLOW_ONLY[n] || ALLOW_ONLY[n].has("helper")));
-    if(helperIdx>=0){
-      const helper = pool.splice(helperIdx,1)[0];
+    const idx = pool.findIndex(n => (!ALLOW_ONLY[n] || ALLOW_ONLY[n].has("helper")));
+    if(idx>=0){
+      const helper = pool.splice(idx,1)[0];
       results["ABF"] = [...(results["ABF"]||[]), `${helper}(小幫手)`];
       results["CDJ"] = [...(results["CDJ"]||[]), `${helper}(小幫手)`];
     }
   }
 
-  // 3) MNO / PQR / GH（各 1）
+  // MNO / PQR / GH
   ["MNO","PQR","GH"].forEach(a=>{
     if(checked[a]===false){ results[a]=[]; return; }
     const who = takeOne(a); results[a] = who? [who] : [];
   });
 
-  // 4) 洗球：剩餘且允許
+  // 洗球、支援、請假
   results["洗球"] = pool.filter(n=>canAssign(n,"洗球",tomoe,d3i));
-  // 5) 支援、請假
   results["支援"] = results["支援"] || [];
   results["請假"] = [...leaveSet];
 
@@ -447,18 +536,22 @@ function autoScheduleOne(dateStr){
   st[dateStr] = day; save(st);
   if(activeDate===dateStr) drawResults(results, day.checked||{});
 }
-function autoScheduleWeek(){
-  weekRange(currentMonday).forEach(d=> autoScheduleOne(fmt(d)));
+function autoScheduleSelectedDays(){
+  const selected = ensureSelected();
+  if(!selected.length){ alert("請先點選要排班的日期（反白）"); return; }
+  selected.forEach(d=> autoScheduleOne(d));
   renderWeek();
-  if(!activeDate){ openDay(fmt(weekRange(currentMonday)[0])); }
+  if(activeDate){ const s=load(); drawResults((s[activeDate]||{}).results||{}, (s[activeDate]||{}).checked||{}); }
 }
 
 /* ====== 事件綁定 ====== */
 document.getElementById("prevWeek").onclick=()=>{ currentMonday.setDate(currentMonday.getDate()-7); renderWeek(); };
 document.getElementById("nextWeek").onclick=()=>{ currentMonday.setDate(currentMonday.getDate()+7); renderWeek(); };
-document.getElementById("autoWeek").onclick = autoScheduleWeek;
+document.getElementById("autoWeek").onclick = autoScheduleSelectedDays;
 document.getElementById("autoToday").onclick = ()=>{
-  if(!activeDate){ alert("請先點上方某一天卡片（變白後），再按『自動排當天』"); return; }
+  if(!activeDate){ alert("請先把某一天反白（點卡片），再按『自動排當天』"); return; }
+  const selected = ensureSelected();
+  if(!selected.includes(activeDate)){ alert("當天尚未反白，請先點卡片使其反白"); return; }
   autoScheduleOne(activeDate); renderWeek();
 };
 
