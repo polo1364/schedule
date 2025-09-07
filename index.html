@@ -114,7 +114,7 @@
     position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--border);
     box-shadow:0 -16px 30px rgba(0,0,0,.3);padding:8px 14px 24px;z-index:75;
     transform:translateY(100%);transition:transform .25s ease;
-    touch-action:none; /* 讓手勢順暢，避免瀏覽器搶焦 */
+    touch-action:none;
   }
   .drawer.open{ transform:translateY(0) }
   .drawer .handleWrap{display:flex;justify-content:center;align-items:center;padding:6px 0 8px;cursor:grab}
@@ -189,7 +189,7 @@
 
 <script>
 /* ========= 常數與資料 ========= */
-const LS_KEY = "weekly_scheduler_rwd_gestures_v1";
+const LS_KEY = "weekly_scheduler_rwd_gestures_fix_v2";
 const PEOPLE = ["佳雯","盈儒","忻潔","阿美","美琪","小瑰","靜媚","韶湄","汶倩","麗凰","奕瑄","小雯","惠玲"];
 const AREAS_WITH_CHECK = ["ABF","CDJ","MNO","PQR","GH"];
 const AREAS_FIXED = ["粗篩","洗球","支援","請假"];
@@ -352,18 +352,23 @@ function canAssign(name, area){
   if (CANNOT[area] && CANNOT[area].has(name)) return false;
   return true;
 }
+
+/* ✅ 修復後：穩定 pickOne（按排班會動） */
 function pickOne(pool, area, allowSet=null){
-  let cands = pool.map((n,i)=>({n,i})).filter(x=>canAssign(x.n, area));
-  if(allowSet){ cands = cands.filter(x=>allowSet.has(x.n)); }
-  if(!cands.length) return null;
-  const pick = cands[Math.floor(Math.random()*(i=cands.length, i))];
-  pool.splice(cands[pick===undefined?0:pick].i,1); // 安全處理（極端情況）
-  return cands[pick===undefined?0:pick].n;
+  let cands = pool.map((n,i)=>({n,i})).filter(x => canAssign(x.n, area));
+  if (allowSet) cands = cands.filter(x => allowSet.has(x.n));
+  if (!cands.length) return null;
+  const idx = Math.floor(Math.random() * cands.length);
+  const pick = cands[idx];      // { n, i }
+  pool.splice(pick.i, 1);       // 從原始 pool 移除
+  return pick.n;
 }
+
 function coreForDate(dateStr){
   const d = new Date(dateStr);
   return (d.getDate() % 2 === 1) ? "佳雯" : "阿美";
 }
+function intersectSets(a,b){ const out=new Set(); for(const v of a){ if(b.has(v)) out.add(v); } return out; }
 function allowedSetFor(area, tomoe, d3i){
   if(area === "ABF"){
     const tOn = !!tomoe["ABF"];
@@ -419,7 +424,7 @@ function recomputeWithLocks(key){
     if (good.length) set(area, good);
   }
 
-  // 1) 粗篩
+  // 1) 粗篩：奇偶核心＋替補
   if(!(results["粗篩"] && results["粗篩"].length)){
     const bothOnLeave = leaveSet.has("佳雯") && leaveSet.has("阿美");
     if (bothOnLeave) {
@@ -644,15 +649,19 @@ function persistDay(patch){
   renderWeek();
 }
 
-/* 共用控制：小幫手 & 按鈕 */
+/* 共用控制：小幫手 & 按鈕（含未選日期提示） */
 document.getElementById("abfHelper").addEventListener('change', e=>{ if(!activeDate) return; persistDay({abfHelper:e.target.checked}); });
-document.getElementById("run").onclick = ()=>{ if(activeDate) runForDay(activeDate); };
+
+document.getElementById("run").onclick = ()=>{
+  if (!activeDate) { alert("請先點上方某一天卡片，再按『自動排班』。"); return; }
+  runForDay(activeDate);
+};
 document.getElementById("clearResults").onclick = ()=>{
-  if(!activeDate) return;
+  if(!activeDate){ alert("請先選擇日期再清空。"); return; }
   const store=load(); store[activeDate]=store[activeDate]||{}; store[activeDate].results={}; store[activeDate].manualLocks={}; save(store);
   syncControls(); renderWeek();
 };
-document.getElementById("saveOnly").onclick = ()=>{ if(activeDate) alert("已保存開機 / 小幫手 / TOMOE / D3I / 請假設定。"); };
+document.getElementById("saveOnly").onclick = ()=>{ if(activeDate) alert("已保存開機 / 小幫手 / TOMOE / D3I / 請假設定。"); else alert("請先選日期。"); };
 
 /* ========= 手機抽屜（手勢） ========= */
 const fab = document.getElementById("fab");
@@ -661,7 +670,7 @@ const scrim = document.getElementById("scrim");
 const dragHandle = document.getElementById("dragHandle");
 
 let startY = 0, currentY = 0, drawerHeight = 0, dragging = false;
-const OPEN_THRESHOLD = 80;  // 放手時，位移超過此值就收/開
+const OPEN_THRESHOLD = 80;
 const clamp = (v,min,max)=>Math.min(max,Math.max(min,v));
 
 function setDrawerTranslateY(px){
@@ -683,14 +692,12 @@ function closeDrawer(){
   scrim.classList.remove('show');
 }
 
-/* 啟動拖曳（支援 touch + mouse） */
 function onDragStart(clientY){
   dragging = true;
   const rect = drawer.getBoundingClientRect();
   drawerHeight = rect.height;
   startY = clientY;
   currentY = 0;
-  // 若抽屜關閉，先讓它在畫面外，準備被拖拽
   if(!drawer.classList.contains('open')){
     drawer.style.transform = `translateY(${drawerHeight}px)`;
     scrim.classList.add('show');
@@ -699,7 +706,6 @@ function onDragStart(clientY){
 function onDragMove(clientY){
   if(!dragging) return;
   const delta = clientY - startY;
-  // 開啟狀態：只能往下拉（正值）；關閉狀態：允許往上拉（負值）
   const base = drawer.classList.contains('open') ? 0 : drawerHeight;
   const y = clamp(base + delta, 0, drawerHeight);
   currentY = y;
@@ -708,22 +714,18 @@ function onDragMove(clientY){
 function onDragEnd(){
   if(!dragging) return;
   drawer.style.transition = 'transform .2s ease';
-  // 若位移過半或超過閾值，決定開or關
   const halfway = drawerHeight / 2;
   if(drawer.classList.contains('open')){
-    // 已開 → 位移大就關
     if(currentY > Math.max(OPEN_THRESHOLD, halfway * 0.6)){ closeDrawer(); }
     else{ openDrawer(); }
   }else{
-    // 已關 → 位移小就開
     if(currentY < drawerHeight - Math.max(OPEN_THRESHOLD, halfway * 0.6)){ openDrawer(); }
     else{ closeDrawer(); }
   }
   dragging = false;
 }
 
-/* 綁手勢 */
-const activeArea = [drawer, dragHandle]; // 允許在整個抽屜範圍拖
+const activeArea = [drawer, dragHandle];
 activeArea.forEach(el=>{
   el.addEventListener('touchstart', e=>{ onDragStart(e.touches[0].clientY); }, {passive:true});
   el.addEventListener('touchmove',  e=>{ onDragMove(e.touches[0].clientY); }, {passive:true});
@@ -734,11 +736,23 @@ activeArea.forEach(el=>{
   window.addEventListener('mouseup',   e=>{ if(dragging) onDragEnd(); });
 });
 
-/* FAB 與背板 */
 fab.addEventListener('click', ()=>{
   if(drawer.classList.contains('open')) closeDrawer(); else openDrawer();
 });
 scrim.addEventListener('click', closeDrawer);
+
+/* 手機面板按鈕（同提示） */
+document.getElementById("mAbfHelper").addEventListener('change', e=>{ if(!activeDate) return; persistDay({abfHelper:e.target.checked}); });
+document.getElementById("mRun").onclick = ()=>{
+  if (!activeDate) { alert("請先點上方某一天卡片，再按『自動排班』。"); return; }
+  runForDay(activeDate);
+};
+document.getElementById("mClearResults").onclick = ()=>{
+  if(!activeDate){ alert("請先選擇日期再清空。"); return; }
+  const store=load(); store[activeDate]=store[activeDate]||{}; store[activeDate].results={}; store[activeDate].manualLocks={}; save(store);
+  syncControls(); renderWeek();
+};
+document.getElementById("mSaveOnly").onclick = ()=>{ if(activeDate) alert("已保存開機 / 小幫手 / TOMOE / D3I / 請假設定。"); else alert("請先選日期。"); };
 
 /* ========= 初始化 ========= */
 function buildAreaControls(rootIdPrefix){
