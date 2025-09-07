@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>自動排班表</title>
+<title>一週班表（RWD＋手勢抽屜｜支援可編輯）</title>
 <style>
   :root{
     --bg:#f3f4f6; --card:#fff; --text:#111827; --muted:#6b7280; --border:#e5e7eb;
@@ -142,7 +142,7 @@
       <div class="areas" id="areaControls"></div>
       <div style="margin:10px 0">
         <label style="display:inline-flex;gap:8px;align-items:center">
-          <input type="checkbox" id="abfHelper"> 小幫手
+          <input type="checkbox" id="abfHelper"> ABF 小幫手
         </label>
       </div>
       <div class="chips" id="peopleChips"></div>
@@ -189,7 +189,7 @@
 
 <script>
 /* ========= 常數與資料 ========= */
-const LS_KEY = "weekly_scheduler_rwd_gestures_fix_v2";
+const LS_KEY = "weekly_scheduler_rwd_gestures_support_edit_v1";
 const PEOPLE = ["佳雯","盈儒","忻潔","阿美","美琪","小瑰","靜媚","韶湄","汶倩","麗凰","奕瑄","小雯","惠玲"];
 const AREAS_WITH_CHECK = ["ABF","CDJ","MNO","PQR","GH"];
 const AREAS_FIXED = ["粗篩","洗球","支援","請假"];
@@ -353,7 +353,7 @@ function canAssign(name, area){
   return true;
 }
 
-/* ✅ 修復後：穩定 pickOne（按排班會動） */
+/* 穩定 pickOne（按排班會動） */
 function pickOne(pool, area, allowSet=null){
   let cands = pool.map((n,i)=>({n,i})).filter(x => canAssign(x.n, area));
   if (allowSet) cands = cands.filter(x => allowSet.has(x.n));
@@ -368,7 +368,6 @@ function coreForDate(dateStr){
   const d = new Date(dateStr);
   return (d.getDate() % 2 === 1) ? "佳雯" : "阿美";
 }
-function intersectSets(a,b){ const out=new Set(); for(const v of a){ if(b.has(v)) out.add(v); } return out; }
 function allowedSetFor(area, tomoe, d3i){
   if(area === "ABF"){
     const tOn = !!tomoe["ABF"];
@@ -410,18 +409,22 @@ function recomputeWithLocks(key){
   set("支援", []);
   set("請假", [...leaveSet]);
 
-  // 先放入鎖定
+  // 先放入鎖定（✅ 不再忽略「支援」，並移出 pool）
   for (const area of ALL_AREAS) {
     const lock = manualLocks[area];
     if (!lock || !lock.length) continue;
     const good = [];
     for (const name of lock) {
-      if (area==="請假"||area==="支援"||area==="未分派") continue;
+      if (area==="請假"||area==="未分派") continue; // 支援不跳過
       if (!canAssignToArea(name, area, tomoe, d3i)) continue;
       if (leaveSet.has(name)) continue;
       good.push(name);
     }
-    if (good.length) set(area, good);
+    if (good.length) {
+      set(area, good);
+      // ⬇️ 把已鎖定的人從池子移除，避免被派去別區
+      good.forEach(nm => { pool = pool.filter(x => x !== nm); });
+    }
   }
 
   // 1) 粗篩：奇偶核心＋替補
@@ -549,7 +552,8 @@ function drawResults(results, manualLocks, tbody){
     const tdA=document.createElement("td"); tdA.textContent=a;
 
     const tdP=document.createElement("td");
-    const isEditable = (a!=="請假" && a!=="支援");
+    // ✅ 支援可編輯（只有「請假」不可編輯）
+    const isEditable = (a!=="請假");
     tdP.textContent = (results[a] && results[a].length) ? results[a].join("、") : "—";
     if(isEditable){
       tdP.classList.add("editable","dropdown");
@@ -577,7 +581,7 @@ function openPicker(td, area, results, manualLocks){
   hint.textContent = "點名字即可替換此區人員（其餘自動重排）";
   picker.append(hint);
 
-  const SINGLE_SLOT = ["ABF","CDJ","MNO","PQR","GH"];
+  const SINGLE_SLOT = ["ABF","CDJ","MNO","PQR","GH"]; // 支援不是單槽，屬於可多選鎖定
   PEOPLE.forEach(name=>{
     const okByLeave = !leaveSet.has(name);
     const okByRule  = allowSet ? allowSet.has(name) : true;
