@@ -2,115 +2,116 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>一週班表</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>一週班表（RWD 強化）</title>
 <style>
-  body{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;margin:0;background:#f3f4f6}
-  header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#1f2937;color:#fff}
-  header h1{font-size:20px;margin:0}
+  :root{
+    --bg:#f3f4f6; --card:#fff; --text:#111827; --muted:#6b7280; --border:#e5e7eb;
+    --accent:#2563eb; --accent-2:#1d4ed8; --shadow:0 1px 4px rgba(0,0,0,.06);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0b0f14; --card:#121721; --text:#e5e7eb; --muted:#9aa4b2; --border:#1f2733;
+      --accent:#3b82f6; --accent-2:#2563eb; --shadow:0 1px 4px rgba(0,0,0,.35);
+    }
+  }
+
+  /* 全域 */
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{font-family:"Microsoft JhengHei","Noto Sans TC",system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:var(--bg);color:var(--text)}
+
+  /* 置頂工具列（sticky） */
+  header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#1f2937;color:#fff}
+  header h1{font-size:18px;margin:0}
   .weekbar{display:flex;gap:8px;align-items:center}
-  .weekbar button{padding:6px 12px;font-size:14px;border:none;border-radius:6px;background:#374151;color:#fff;cursor:pointer}
+  .weekbar button{padding:8px 12px;font-size:14px;border:none;border-radius:8px;background:#374151;color:#fff;cursor:pointer;touch-action:manipulation}
+  .weekbar button:active{transform:translateY(1px)}
   .weekbar button:hover{background:#4b5563}
+  #weekLabel{font-size:14px;opacity:.9}
 
-  /* === 版面：上方週曆，下方設定 === */
-  .container{
-    display:grid;
-    grid-template-columns: 1fr;
-    grid-template-rows: auto auto;
-    grid-template-areas:
-      "cal"
-      "panel";
-  }
-  .grid{
-    grid-area: cal;
-    display:grid;
-    grid-template-columns:repeat(7,1fr);
-    gap:12px;
-    padding:12px 16px;
-  }
-  .side{
-    grid-area: panel;
-    border-left:none;
-    border-top:1px solid #e5e7eb;
-    background:#fff;
-    padding:16px;
-    box-shadow:0 -4px 16px rgba(0,0,0,.05);
-  }
+  /* 版面：上方週曆，下方面板（小螢幕時面板抽屜化） */
+  .container{display:grid;grid-template-columns:1fr;grid-template-rows:auto auto;grid-template-areas:"cal" "panel"}
+  .grid{grid-area:cal;display:grid;gap:12px;padding:12px 14px}
 
-  /* === 日期卡片扁平化 === */
+  /* 卡片（日期） */
   .day{
-    background:#fff;border-radius:10px;border:1px solid #e5e7eb;
-    box-shadow:0 1px 4px rgba(0,0,0,.06);padding:8px;min-height:72px;
-    display:flex;flex-direction:column;cursor:pointer;
+    background:var(--card);border-radius:12px;border:1px solid var(--border);
+    box-shadow:var(--shadow);padding:8px;min-height:72px;display:flex;flex-direction:column;cursor:pointer;
+    transition:background .15s ease,border-color .15s ease;
   }
-  .day:hover{background:#f9fafb}
+  .day:hover{background:rgba(148,163,184,.12)}
   .day .date{
-    font-size:13px;font-weight:600;color:#111827;background:#f3f4f6;border:1px solid #e5e7eb;
+    font-size:13px;font-weight:700;color:var(--text);
+    background:rgba(148,163,184,.18);border:1px solid var(--border);
     border-radius:8px;padding:4px 8px;margin-bottom:6px;display:inline-block;
   }
 
-  /* ===== 卡片摘要：多行、兩欄（區域 / 人員） ===== */
-  .day .summary{
-    white-space: normal;          /* 可換行 */
-    overflow: visible;
-    text-overflow: initial;
-    font-size: 12px;
-    color: #374151;
-  }
-  .sumgrid{
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-  .srow{
-    display: grid;
-    grid-template-columns: 46px 1fr; /* 左：區名 / 右：人員 */
-    align-items: start;
-    column-gap: 6px;
-    line-height: 1.35;
-  }
-  .srow .k{ color:#6b7280; font-weight:600; }
-  .srow .v{ color:#111827; }
+  /* 卡片摘要：多行、兩欄 */
+  .day .summary{white-space:normal;overflow:visible;text-overflow:initial;font-size:12px;color:#374151}
+  @media (prefers-color-scheme: dark){ .day .summary{color:#cbd5e1} }
+  .sumgrid{display:flex;flex-direction:column;gap:4px}
+  .srow{display:grid;grid-template-columns:54px 1fr;align-items:start;column-gap:6px;line-height:1.35}
+  .srow .k{color:var(--muted);font-weight:700}
+  .srow .v{color:var(--text)}
 
-  /* 面板元件 */
-  .side h2{margin:0 0 12px;font-size:18px;color:#111827}
-  .chips{display:flex;flex-wrap:wrap;gap:8px}
-  .chip{border:1px solid #d1d5db;border-radius:20px;padding:4px 10px;background:#f9fafb;font-size:13px}
+  /* 面板（桌機顯示；手機做成可收合抽屜） */
+  .side{grid-area:panel;border-left:none;border-top:1px solid var(--border);background:var(--card);padding:14px 14px 82px; /* 預留底部FAB空間 */
+        box-shadow:0 -4px 16px rgba(0,0,0,.06)}
+  .side h2{margin:0 0 12px;font-size:17px}
   .areas{display:flex;flex-wrap:wrap;gap:10px}
-  .areas label{display:flex;gap:6px;align-items:center;padding:6px 10px;border:1px solid #d1d5db;border-radius:8px;background:#f9fafb;font-size:14px;cursor:pointer}
+  .areas label{display:flex;gap:8px;align-items:center;padding:8px 12px;border:1px solid var(--border);border-radius:10px;background:rgba(148,163,184,.12);font-size:14px;cursor:pointer}
+  .areas input[type="checkbox"]{width:18px;height:18px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+  .chip{border:1px solid var(--border);border-radius:20px;padding:6px 12px;background:rgba(148,163,184,.12);font-size:14px;display:inline-flex;gap:8px;align-items:center}
+  .chip input{width:18px;height:18px}
   .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
-  .btns button{padding:8px 14px;border:none;border-radius:6px;background:#2563eb;color:#fff;font-size:14px;cursor:pointer}
-  .btns button:hover{background:#1d4ed8}
+  .btns button{padding:10px 14px;border:none;border-radius:10px;background:var(--accent);color:#fff;font-size:14px;cursor:pointer;touch-action:manipulation}
+  .btns button:hover{background:var(--accent-2)}
 
   table{width:100%;border-collapse:collapse;margin-top:12px}
-  th,td{border:1px solid #d1d5db;padding:8px 10px;text-align:center;font-size:15px}
-  th{background:#f3f4f6;font-weight:600}
+  th,td{border:1px solid var(--border);padding:10px;text-align:center;font-size:15px}
+  th{background:rgba(148,163,184,.18);font-weight:700}
+
+  /* 彈出名單（點名字即換人） */
+  td.editable{cursor:pointer}
+  td.editable:hover{background:rgba(148,163,184,.12)}
+  .dropdown{position:relative}
+  .picker{
+    position:absolute;z-index:1000;background:var(--card);border:1px solid var(--border);
+    border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.2);padding:10px;min-width:240px;max-height:55vh;overflow:auto;right:0;
+  }
+  .picker .row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px}
+  .picker .row:hover{background:rgba(148,163,184,.16)}
+  .picker .row.disabled{opacity:.45;pointer-events:none}
+  .picker .hint{font-size:12px;color:var(--muted);margin:0 2px 8px}
+  .picker .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+  .picker .actions button{padding:8px 10px;border:none;border-radius:8px;cursor:pointer;background:rgba(148,163,184,.18);color:var(--text)}
+
+  /* 浮動面板按鈕（小螢幕） */
+  .fab{
+    position:fixed;right:16px;bottom:16px;z-index:60;border:none;border-radius:999px;
+    padding:12px 16px;background:var(--accent);color:#fff;font-size:14px;box-shadow:0 8px 20px rgba(0,0,0,.25);display:none;
+  }
+  .drawer{position:fixed;left:0;right:0;bottom:-100%;background:var(--card);border-top:1px solid var(--border);box-shadow:0 -16px 30px rgba(0,0,0,.3);padding:14px 14px 24px;z-index:55;transition:bottom .25s ease}
+  .drawer.open{bottom:0}
+  .drawer .handle{width:44px;height:5px;background:rgba(148,163,184,.5);border-radius:999px;margin:6px auto 10px}
+
+  /* RWD 斷點：欄數自適應 */
+  @media (min-width:360px){ .grid{grid-template-columns:repeat(1,1fr)} }
+  @media (min-width:600px){ .grid{grid-template-columns:repeat(2,1fr)} .day{min-height:80px} }
+  @media (min-width:900px){ .grid{grid-template-columns:repeat(4,1fr)} .side{padding-bottom:18px} }
+  @media (min-width:1280px){ .grid{grid-template-columns:repeat(7,1fr)} }
+
+  /* 小螢幕模式：把面板藏成抽屜，FAB 顯示 */
+  @media (max-width:899px){
+    .side{display:none}
+    .fab{display:block}
+  }
 
   /* 小選項（TOMOE / D3I） */
-  .optBox{margin-left:8px;font-size:12px;color:#444;display:none;align-items:center;gap:4px}
-  .optBox input{ transform:scale(1.1); }
-
-  /* 下拉（點名字即換人） */
-  td.editable{ cursor:pointer; }
-  td.editable:hover{ background:#f9fafb; }
-  .dropdown{ position:relative; }
-  .picker{
-    position:absolute; z-index:1000; background:#fff; border:1px solid #d1d5db;
-    border-radius:10px; box-shadow:0 8px 20px rgba(0,0,0,.12); padding:10px;
-    min-width:220px; max-height:340px; overflow:auto; right:0;
-  }
-  .picker .row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;}
-  .picker .row:hover{background:#f3f4f6;}
-  .picker .row.disabled{opacity:.45; pointer-events:none;}
-  .picker .hint{font-size:12px;color:#6b7280;margin:0 2px 8px;}
-  .picker .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
-  .picker .actions button{padding:6px 10px;border:none;border-radius:6px;cursor:pointer}
-  .picker .actions .clear{background:#e5e7eb}
-
-  @media(max-width:1024px){
-    .grid{gap:10px;padding:10px}
-    .side{box-shadow:none;border-top:1px solid #e5e7eb}
-  }
+  .optBox{margin-left:8px;font-size:12px;color:#444;display:none;align-items:center;gap:6px}
+  .optBox input{width:18px;height:18px}
 </style>
 </head>
 <body>
@@ -125,17 +126,19 @@
 
 <div class="container">
   <div class="grid" id="grid"></div>
+
+  <!-- 桌機版面板 -->
   <aside class="side" id="side">
     <h2 id="panelTitle">請從上方選日期</h2>
     <div id="panel" style="display:none">
       <div class="areas" id="areaControls"></div>
       <div style="margin:10px 0">
-        <label style="display:inline-flex;gap:6px;align-items:center">
+        <label style="display:inline-flex;gap:8px;align-items:center">
           <input type="checkbox" id="abfHelper"> ABF 小幫手
         </label>
       </div>
       <div class="chips" id="peopleChips"></div>
-      <div style="color:#6b7280;font-size:12px;margin-top:6px">勾選 = 請假</div>
+      <div style="color:var(--muted);font-size:12px;margin-top:6px">勾選 = 請假</div>
       <div class="btns">
         <button id="run">⚡ 自動排班（此日）</button>
         <button id="clearResults">清空結果</button>
@@ -149,17 +152,43 @@
   </aside>
 </div>
 
+<!-- 手機抽屜面板 -->
+<button class="fab" id="fab">設定 / 排班</button>
+<div class="drawer" id="drawer">
+  <div class="handle"></div>
+  <h2 id="mPanelTitle" style="margin:0 0 10px;font-size:16px">設定</h2>
+  <div id="mPanel">
+    <div class="areas" id="mAreaControls"></div>
+    <div style="margin:10px 0">
+      <label style="display:inline-flex;gap:8px;align-items:center">
+        <input type="checkbox" id="mAbfHelper"> ABF 小幫手
+      </label>
+    </div>
+    <div class="chips" id="mPeopleChips"></div>
+    <div style="color:var(--muted);font-size:12px;margin-top:6px">勾選 = 請假</div>
+    <div class="btns">
+      <button id="mRun">⚡ 自動排班（此日）</button>
+      <button id="mClearResults">清空結果</button>
+      <button id="mSaveOnly">只存請假/開機</button>
+    </div>
+    <table>
+      <thead><tr><th>工作區域</th><th>人員</th></tr></thead>
+      <tbody id="mResultBody"></tbody>
+    </table>
+  </div>
+</div>
+
 <script>
 /* ========= 常數與資料 ========= */
-const LS_KEY = "weekly_scheduler_full_v8_click_to_swap";
+const LS_KEY = "weekly_scheduler_rwd_v1";
 const PEOPLE = ["佳雯","盈儒","忻潔","阿美","美琪","小瑰","靜媚","韶湄","汶倩","麗凰","奕瑄","小雯","惠玲"];
 const AREAS_WITH_CHECK = ["ABF","CDJ","MNO","PQR","GH"];
 const AREAS_FIXED = ["粗篩","洗球","支援","請假"];
 const ALL_AREAS = [...AREAS_WITH_CHECK, ...AREAS_FIXED, "未分派"];
 
-/* 限制規則（不顯示於畫面） */
+/* 限制規則 */
 const CANNOT = { "洗球": new Set(["阿美","佳雯","靜媚"]), "粗篩": new Set(["靜媚"]) };
-const ALLOW_ONLY = { "美琪": new Set(["ABF","helper","洗球"]) }; // 美琪只能 ABF / 小幫手 / 洗球
+const ALLOW_ONLY = { "美琪": new Set(["ABF","helper","洗球"]) };
 
 /* TOMOE / D3I 限制 */
 const TOMOE_ALLOWED = new Set(["佳雯","惠玲"]);
@@ -173,25 +202,18 @@ function save(s){ localStorage.setItem(LS_KEY, JSON.stringify(s)); }
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 function intersectSets(a,b){ const out=new Set(); for(const v of a){ if(b.has(v)) out.add(v); } return out; }
 
-/* ========= 摘要產生（固定順序＋未開機不顯示） ========= */
+/* ========= 摘要（固定順序＋未開機不顯示） ========= */
 function buildSummary(dayData){
   const res = (dayData && dayData.results) || {};
   const checked = (dayData && dayData.checked) || {};
   const order = ["ABF","CDJ","MNO","PQR","GH","粗篩","洗球","支援","請假"];
   const rows = order.map(area=>{
     const arr = res[area] || [];
-    let val = "";
-    if (["ABF","CDJ","MNO","PQR","GH"].includes(area) && !checked[area]) return "";
-    if (arr.length){
-      if (area === "洗球"){
-        const MAX=4;
-        val = (arr.length>MAX) ? `${arr.slice(0,MAX).join("、")} 等 +${arr.length-MAX}` : arr.join("、");
-      }else{
-        val = arr.join("、");
-      }
-    }else{
-      return "";
-    }
+    if (["ABF","CDJ","MNO","PQR","GH"].includes(area) && !(checked||{})[area]) return "";
+    if (!arr.length) return "";
+    const val = (area === "洗球")
+      ? (arr.length>4 ? `${arr.slice(0,4).join("、")} 等 +${arr.length-4}` : arr.join("、"))
+      : arr.join("、");
     return `<div class="srow"><div class="k">${area}</div><div class="v">${val}</div></div>`;
   }).filter(Boolean);
   return rows.length ? `<div class="sumgrid">${rows.join("")}</div>` : "（尚未排班）";
@@ -217,7 +239,7 @@ function renderWeek(){
     card.onclick = ()=> openDay(key);
     const title = document.createElement("div");
     title.className="date";
-    title.textContent = `${key}`;
+    title.textContent = key;
     const sum = document.createElement("div");
     sum.className="summary";
     const dayData = store[key]||{};
@@ -228,125 +250,95 @@ function renderWeek(){
   });
 }
 
-/* ========= 右側每日面板 ========= */
+/* ========= 面板（桌機 + 手機抽屜共用） ========= */
 const panel = document.getElementById("panel");
 const panelTitle = document.getElementById("panelTitle");
 const peopleChips = document.getElementById("peopleChips");
 const resultBody = document.getElementById("resultBody");
 const areaControls = document.getElementById("areaControls");
+
+const mPanelTitle = document.getElementById("mPanelTitle");
+const mPeopleChips = document.getElementById("mPeopleChips");
+const mResultBody = document.getElementById("mResultBody");
+const mAreaControls = document.getElementById("mAreaControls");
+
 let activeDate = null;
 
-/* 產生每個區域的「開機」+（TOMOE / D3I）UI */
-function buildAreaControls(){
-  areaControls.innerHTML="";
+function bindSharedControls(rootIdPrefix){
+  const areaRoot = rootIdPrefix === "m" ? mAreaControls : areaControls;
+  areaRoot.innerHTML = "";
   AREAS_WITH_CHECK.forEach(area=>{
     const wrap = document.createElement("label");
-    Object.assign(wrap.style,{
-      display:"flex",alignItems:"center",gap:"6px",
-      border:"1px solid #d1d5db",padding:"6px 10px",
-      borderRadius:"8px",background:"#f9fafb",cursor:"pointer",fontSize:"14px"
-    });
-
-    const cb = document.createElement("input");
-    cb.type="checkbox"; cb.dataset.area=area;
-
+    Object.assign(wrap.style,{display:"flex",alignItems:"center",gap:"8px",padding:"8px 12px"});
+    const cb = document.createElement("input"); cb.type="checkbox"; cb.dataset.area=area;
     const nameNode = document.createTextNode(area);
 
-    const tomoeBox = document.createElement("span");
-    tomoeBox.className="optBox";
-    const tomoeCb = document.createElement("input");
-    tomoeCb.type="checkbox"; tomoeCb.dataset.tomoe=area;
+    const tomoeBox = document.createElement("span"); tomoeBox.className="optBox";
+    const tomoeCb = document.createElement("input"); tomoeCb.type="checkbox"; tomoeCb.dataset.tomoe=area;
     tomoeBox.append(tomoeCb, document.createTextNode("TOMOE"));
 
-    const d3iBox = document.createElement("span");
-    d3iBox.className="optBox";
-    const d3iCb = document.createElement("input");
-    d3iCb.type="checkbox"; d3iCb.dataset.d3i=area;
+    const d3iBox = document.createElement("span"); d3iBox.className="optBox";
+    const d3iCb = document.createElement("input"); d3iCb.type="checkbox"; d3iCb.dataset.d3i=area;
     d3iBox.append(d3iCb, document.createTextNode("D3I"));
-    if(area !== "ABF") d3iBox.style.display = "none";
+    if(area!=="ABF") d3iBox.style.display="none";
 
     cb.addEventListener("change", ()=>{
       if(!activeDate) return;
       const store=load(); const day=store[activeDate]||{};
-      day.checked=day.checked||{};
-      day.checked[area]=cb.checked;
-
+      day.checked=day.checked||{}; day.checked[area]=cb.checked;
       if(!cb.checked){
-        tomoeCb.checked=false;
-        d3iCb.checked=false;
+        tomoeCb.checked=false; d3iCb.checked=false;
         day.tomoe = day.tomoe || {}; day.tomoe[area]=false;
         day.d3i   = day.d3i   || {}; day.d3i[area]=false;
       }
       store[activeDate]=day; save(store);
-
-      tomoeBox.style.display = cb.checked ? "inline-flex":"none";
-      if(area==="ABF") d3iBox.style.display = cb.checked ? "inline-flex":"none";
-
-      renderWeek();
+      syncControls(); renderWeek();
     });
-
-    tomoeCb.addEventListener("change", ()=>{
-      if(!activeDate) return;
-      const store=load(); const day=store[activeDate]||{};
-      day.tomoe=day.tomoe||{};
-      day.tomoe[area]=tomoeCb.checked;
-      store[activeDate]=day; save(store);
-    });
-
-    d3iCb.addEventListener("change", ()=>{
-      if(!activeDate) return;
-      const store=load(); const day=store[activeDate]||{};
-      day.d3i=day.d3i||{};
-      day.d3i[area]=d3iCb.checked;
-      store[activeDate]=day; save(store);
-    });
+    tomoeCb.addEventListener("change", ()=>{ if(!activeDate) return; const s=load(); const d=s[activeDate]||{}; d.tomoe=d.tomoe||{}; d.tomoe[area]=tomoeCb.checked; s[activeDate]=d; save(s); });
+    d3iCb.addEventListener("change", ()=>{ if(!activeDate) return; const s=load(); const d=s[activeDate]||{}; d.d3i=d.d3i||{}; d.d3i[area]=d3iCb.checked; s[activeDate]=d; save(s); });
 
     wrap.append(cb, nameNode, tomoeBox, d3iBox);
-    areaControls.append(wrap);
+    areaRoot.append(wrap);
   });
+}
+function syncControls(){
+  // 將資料同步到桌機與手機兩份 UI
+  const store = load(); const day = store[activeDate]||{};
+  const leave = new Set(day.leave||[]);
+  const checked = day.checked||{}; const tomoe=day.tomoe||{}; const d3i=day.d3i||{};
+  const abfHelper = !!day.abfHelper;
+
+  // checkboxes
+  document.querySelectorAll('[data-area]').forEach(el=>{
+    const area = el.dataset.area; el.checked = !!checked[area];
+    const t = el.parentElement.querySelector('[data-tomoe]'); if(t){ t.checked = !!tomoe[area]; t.parentElement.style.display = el.checked ? "inline-flex":"none"; }
+    const d3 = el.parentElement.querySelector('[data-d3i]'); if(d3){ d3.checked = !!d3i[area]; d3.parentElement.style.display = (el.checked && area==="ABF") ? "inline-flex":"none"; }
+  });
+  const abfId = document.getElementById("abfHelper"); if(abfId) abfId.checked = abfHelper;
+  const mabfId = document.getElementById("mAbfHelper"); if(mabfId) mabfId.checked = abfHelper;
+
+  // people chips（桌機）
+  peopleChips.innerHTML=""; mPeopleChips.innerHTML="";
+  const addChip = (root, name)=>{
+    const label = document.createElement("label"); label.className="chip";
+    const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=leave.has(name);
+    cb.onchange = ()=>{ if(cb.checked) leave.add(name); else leave.delete(name); persistDay({leave:[...leave]}); };
+    label.append(cb, document.createTextNode(" "+name)); root.append(label);
+  };
+  PEOPLE.forEach(n=>{ addChip(peopleChips,n); addChip(mPeopleChips,n); });
+
+  // results
+  drawResults(day.results||{}, day.manualLocks||{}, resultBody);
+  drawResults(day.results||{}, day.manualLocks||{}, mResultBody);
 }
 
 function openDay(key){
   activeDate = key;
   panelTitle.textContent = `設定：${key}`;
-  panel.style.display = "";
-
-  const store = load();
-  const day = store[key] || {};
-  const leave = new Set(day.leave || []);
-  const checked = day.checked || {};
-  const tomoe = day.tomoe || {};
-  const d3i   = day.d3i   || {};
-  const abfHelper = !!day.abfHelper;
-
-  document.querySelectorAll('[data-area]').forEach(el=>{
-    const area = el.dataset.area;
-    el.checked = !!checked[area];
-
-    const tomoeEl = el.parentElement.querySelector('[data-tomoe]');
-    if(tomoeEl){
-      tomoeEl.checked = !!tomoe[area];
-      tomoeEl.parentElement.style.display = el.checked ? "inline-flex":"none";
-    }
-    const d3iEl = el.parentElement.querySelector('[data-d3i]');
-    if(d3iEl){
-      d3iEl.checked = !!d3i[area];
-      d3iEl.parentElement.style.display = (el.checked && area==="ABF") ? "inline-flex":"none";
-    }
-  });
-  document.getElementById("abfHelper").checked = abfHelper;
-
-  peopleChips.innerHTML="";
-  PEOPLE.forEach(name=>{
-    const label = document.createElement("label");
-    label.className="chip";
-    const cb = document.createElement("input"); cb.type="checkbox"; cb.checked = leave.has(name);
-    cb.onchange = ()=> { if(cb.checked) leave.add(name); else leave.delete(name); persistDay({leave:[...leave]}); };
-    label.append(cb, document.createTextNode(" "+name));
-    peopleChips.append(label);
-  });
-
-  drawResults(day.results||{}, day.manualLocks||{});
+  mPanelTitle.textContent = `設定：${key}`;
+  document.getElementById("panel").style.display = "";
+  const store = load(); if(!store[key]){ store[key]={}; save(store); }
+  syncControls();
 }
 
 /* ========= 規則引擎 ========= */
@@ -408,7 +400,7 @@ function recomputeWithLocks(key){
   set("支援", []);
   set("請假", [...leaveSet]);
 
-  // 先放入鎖定（不合法或請假會被忽略）
+  // 先放入鎖定
   for (const area of ALL_AREAS) {
     const lock = manualLocks[area];
     if (!lock || !lock.length) continue;
@@ -422,7 +414,7 @@ function recomputeWithLocks(key){
     if (good.length) set(area, good);
   }
 
-  // 1) 粗篩（日期奇偶 → 核心；兩人都請假 → 補兩位隨機）
+  // 1) 粗篩
   if(!(results["粗篩"] && results["粗篩"].length)){
     const bothOnLeave = leaveSet.has("佳雯") && leaveSet.has("阿美");
     if (bothOnLeave) {
@@ -460,11 +452,7 @@ function recomputeWithLocks(key){
 
   const takeLocked = (area)=>{
     const lock = manualLocks[area]||[];
-    if(lock.length){
-      set(area, lock.slice());
-      lock.forEach(n=>{ pool = pool.filter(x=>x!==n); });
-      return true;
-    }
+    if(lock.length){ set(area, lock.slice()); lock.forEach(n=>{ pool = pool.filter(x=>x!==n); }); return true; }
     return false;
   };
   const abfLocked = takeLocked("ABF");
@@ -531,22 +519,21 @@ function recomputeWithLocks(key){
   day.results = results;
   day.manualLocks = manualLocks;
   store[key] = day; save(store);
-  if(key===activeDate){ drawResults(results, manualLocks); }
+  if(key===activeDate){ drawResults(results, manualLocks, resultBody); drawResults(results, manualLocks, mResultBody); }
   renderWeek();
 }
 
 /* ========= 自動排班 ========= */
 function runForDay(key){
-  const store = load();
-  const day = store[key] || {};
+  const store = load(); const day = store[key] || {};
   day.manualLocks = day.manualLocks || {};
   store[key]=day; save(store);
   recomputeWithLocks(key);
 }
 
 /* ========= 結果表 + 點名字即換人 ========= */
-function drawResults(results, manualLocks){
-  resultBody.innerHTML="";
+function drawResults(results, manualLocks, tbody){
+  tbody.innerHTML="";
   ALL_AREAS.forEach(a=>{
     const tr=document.createElement("tr");
     const tdA=document.createElement("td"); tdA.textContent=a;
@@ -556,13 +543,13 @@ function drawResults(results, manualLocks){
     tdP.textContent = (results[a] && results[a].length) ? results[a].join("、") : "—";
     if(isEditable){
       tdP.classList.add("editable","dropdown");
-      tdP.onclick = ()=> openPicker(tdP, a, results, manualLocks); // 點了彈出名單，點名字立即替換
+      tdP.onclick = (e)=>{ e.stopPropagation(); openPicker(tdP, a, results, manualLocks); };
     }
-    tr.append(tdA,tdP); resultBody.append(tr);
+    tr.append(tdA,tdP); tbody.append(tr);
   });
 }
 
-/* 下拉【點名字即可換人】（僅顯示允許＋未請假；點一下立即生效、關閉） */
+/* 點名字即可換人（彈窗） */
 function openPicker(td, area, results, manualLocks){
   closeAnyPicker();
   const store = load();
@@ -580,8 +567,7 @@ function openPicker(td, area, results, manualLocks){
   hint.textContent = "點名字即可替換此區人員（其餘自動重排）";
   picker.append(hint);
 
-  const SINGLE_SLOT = ["ABF","CDJ","MNO","PQR","GH"]; // 單槽區
-
+  const SINGLE_SLOT = ["ABF","CDJ","MNO","PQR","GH"];
   PEOPLE.forEach(name=>{
     const okByLeave = !leaveSet.has(name);
     const okByRule  = allowSet ? allowSet.has(name) : true;
@@ -599,27 +585,20 @@ function openPicker(td, area, results, manualLocks){
       row.onclick = ()=>{
         const st=load(); const d=st[activeDate]||{};
         d.manualLocks = d.manualLocks || {};
-
-        if(SINGLE_SLOT.includes(area)){
-          // 單槽：覆蓋為 [name]
-          d.manualLocks[area] = [name];
-        }else{
-          // 多槽（粗篩/洗球）：加入鎖定名單（去重）
+        if(SINGLE_SLOT.includes(area)){ d.manualLocks[area] = [name]; }
+        else{
           const prev = Array.isArray(d.manualLocks[area]) ? d.manualLocks[area].slice() : [];
           if(!prev.includes(name)) prev.push(name);
           d.manualLocks[area] = prev;
         }
-
         st[activeDate]=d; save(st);
         recomputeWithLocks(activeDate);
         closeAnyPicker();
       };
     }
-
     picker.append(row);
   });
 
-  // 清空鎖定
   const actions = document.createElement("div");
   actions.className = "actions";
   const btnClear = document.createElement("button");
@@ -627,8 +606,7 @@ function openPicker(td, area, results, manualLocks){
   btnClear.textContent = "清空鎖定";
   btnClear.onclick = ()=>{
     const st=load(); const d=st[activeDate]||{};
-    d.manualLocks = d.manualLocks || {};
-    d.manualLocks[area] = [];
+    d.manualLocks = d.manualLocks || {}; d.manualLocks[area] = [];
     st[activeDate]=d; save(st);
     recomputeWithLocks(activeDate);
     closeAnyPicker();
@@ -638,6 +616,7 @@ function openPicker(td, area, results, manualLocks){
 
   td.appendChild(picker);
 
+  // 防止超出畫面
   const rect = picker.getBoundingClientRect();
   const vh = window.innerHeight;
   if(rect.bottom > vh) picker.style.maxHeight = (vh - rect.top - 12) + "px";
@@ -646,7 +625,7 @@ function openPicker(td, area, results, manualLocks){
     const closer = (e)=>{
       if(!picker.contains(e.target)){ closeAnyPicker(); document.removeEventListener("mousedown", closer); }
     };
-    document.addEventListener("mousedown", closer);
+    document.addEventListener("mousedown", closer, {passive:true});
   },0);
 }
 function closeAnyPicker(){ document.querySelectorAll(".picker").forEach(p=>p.remove()); }
@@ -660,20 +639,33 @@ function persistDay(patch){
   renderWeek();
 }
 
-/* 面板按鈕 */
-document.getElementById("abfHelper").addEventListener('change', e=>{
-  if(!activeDate) return; persistDay({abfHelper: e.target.checked});
-});
+/* 共用控制：小幫手 & 按鈕 */
+document.getElementById("abfHelper").addEventListener('change', e=>{ if(!activeDate) return; persistDay({abfHelper:e.target.checked}); });
 document.getElementById("run").onclick = ()=>{ if(activeDate) runForDay(activeDate); };
 document.getElementById("clearResults").onclick = ()=>{
   if(!activeDate) return;
   const store=load(); store[activeDate]=store[activeDate]||{}; store[activeDate].results={}; store[activeDate].manualLocks={}; save(store);
-  drawResults({}, {}); renderWeek();
+  syncControls(); renderWeek();
 };
 document.getElementById("saveOnly").onclick = ()=>{ if(activeDate) alert("已保存開機 / 小幫手 / TOMOE / D3I / 請假設定。"); };
 
+/* 手機抽屜按鈕 */
+const fab = document.getElementById("fab");
+const drawer = document.getElementById("drawer");
+fab.addEventListener("click", ()=>{ drawer.classList.toggle("open"); });
+
+document.getElementById("mAbfHelper").addEventListener('change', e=>{ if(!activeDate) return; persistDay({abfHelper:e.target.checked}); });
+document.getElementById("mRun").onclick = ()=>{ if(activeDate) runForDay(activeDate); };
+document.getElementById("mClearResults").onclick = ()=>{
+  if(!activeDate) return;
+  const store=load(); store[activeDate]=store[activeDate]||{}; store[activeDate].results={}; store[activeDate].manualLocks={}; save(store);
+  syncControls(); renderWeek();
+};
+document.getElementById("mSaveOnly").onclick = ()=>{ if(activeDate) alert("已保存開機 / 小幫手 / TOMOE / D3I / 請假設定。"); };
+
 /* 初始化 */
-buildAreaControls();
+bindSharedControls("");  // 桌機
+bindSharedControls("m"); // 手機
 renderWeek();
 </script>
 </body>
